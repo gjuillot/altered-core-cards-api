@@ -6,6 +6,7 @@ use ApiPlatform\Doctrine\Orm\Filter\AbstractFilter;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Debug\FilterProfiler;
+use App\Entity\Card;
 use App\Entity\CardGroupTranslation;
 use App\Search\SearchBackendInterface;
 use Doctrine\ORM\QueryBuilder;
@@ -52,6 +53,7 @@ final class CardNameFilter extends AbstractFilter
         }
 
         $root = $queryBuilder->getRootAliases()[0];
+        $isCardGroup = Card::class === $resourceClass;
 
         // ── Search backend fast path ─────────────────────────────────────────
         $this->profiler?->start('name', $this->searchBackend::class);
@@ -75,11 +77,28 @@ final class CardNameFilter extends AbstractFilter
         $this->profiler?->stop('name', null);
 
         // ── PostgreSQL LIKE fallback ─────────────────────────────────────────
-        $cgAlias = $this->getOrJoinCardGroup($queryBuilder, $root);
+        $cgAlias = $isCardGroup ? $root : $this->getOrJoinCardGroup($queryBuilder, $root);
 
         if (is_string($value)) {
             $search = trim($value);
             if ($search === '') return;
+
+            // CardGroup has translations directly (EAGER loaded), no need to join
+            if ($isCardGroup) {
+                $pName = $queryNameGenerator->generateParameterName('name_search');
+                $subDql = sprintf(
+                    'SELECT 1 FROM %s t WHERE t.cardGroup = %s AND LOWER(t.name) LIKE :%s',
+                    CardGroupTranslation::class,
+                    $root,
+                    $pName,
+                );
+                $queryBuilder
+                    ->andWhere($queryBuilder->expr()->exists($subDql))
+                    ->setParameter($pName, '%' . mb_strtolower($search) . '%');
+                return;
+            }
+
+            // Card entity - need to go through cardGroup
             $tAlias = $queryNameGenerator->generateJoinAlias('cgt');
             $pName  = $queryNameGenerator->generateParameterName('name_search');
             $queryBuilder
@@ -95,17 +114,28 @@ final class CardNameFilter extends AbstractFilter
             $search = trim((string) $search);
             if ($search === '') continue;
 
-            $tAlias = $queryNameGenerator->generateJoinAlias('cgt');
             $pLoc   = $queryNameGenerator->generateParameterName('name_locale');
             $pName  = $queryNameGenerator->generateParameterName('name_search');
 
-            $subDql = sprintf(
-                'SELECT 1 FROM %s %s WHERE %s.cardGroup = %s AND %s.locale = :%s AND LOWER(%s.name) LIKE :%s',
-                CardGroupTranslation::class, $tAlias,
-                $tAlias, $cgAlias,
-                $tAlias, $pLoc,
-                $tAlias, $pName,
-            );
+            // CardGroup - already on CardGroup entity
+            if ($isCardGroup) {
+                $subDql = sprintf(
+                    'SELECT 1 FROM %s t WHERE t.cardGroup = %s AND t.locale = :%s AND LOWER(t.name) LIKE :%s',
+                    CardGroupTranslation::class,
+                    $root,
+                    $pLoc,
+                    $pName,
+                );
+            } else {
+                $tAlias = $queryNameGenerator->generateJoinAlias('cgt');
+                $subDql = sprintf(
+                    'SELECT 1 FROM %s %s WHERE %s.cardGroup = %s AND %s.locale = :%s AND LOWER(%s.name) LIKE :%s',
+                    CardGroupTranslation::class, $tAlias,
+                    $tAlias, $cgAlias,
+                    $tAlias, $pLoc,
+                    $tAlias, $pName,
+                );
+            }
 
             $orParts[] = $queryBuilder->expr()->exists($subDql);
             $queryBuilder

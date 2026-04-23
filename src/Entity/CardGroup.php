@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Filter\ReferenceFilter;
+use App\Filter\CardNameFilter;
 use App\Model\TimestampInterface;
 use App\Entity\Rarity;
 use App\Model\TimestampTrait;
@@ -62,6 +63,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\HasNoEffectFilter::class, properties: ['hasNoEffect'])]
 #[ApiFilter(\App\Filter\SameTriggerCountFilter::class, properties: ['minSameTriggerCount'])]
 #[ApiFilter(\App\Filter\EffectSlotFilter::class, properties: ['effectSlot'])]
+#[ApiFilter(\App\Filter\CardNameFilter::class, properties: ['name'])]
 #[ApiFilter(OrderFilter::class, properties: ['mainCost', 'recallCost'])]
 class CardGroup implements TimestampInterface
 {
