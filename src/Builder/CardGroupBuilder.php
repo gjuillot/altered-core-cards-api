@@ -254,7 +254,6 @@ class CardGroupBuilder
             if (array_key_exists('MAIN_EFFECT', $elements)) {
                 $translation->setMainEffect($elements['MAIN_EFFECT']);
 
-                // Also update the MainEffect entity text for this locale
                 $parts  = array_values(array_filter(array_map('trim', explode('  ', $elements['MAIN_EFFECT']))));
                 $setter = 'setText' . ucfirst($language);
 
@@ -267,12 +266,18 @@ class CardGroupBuilder
                 if (isset($parts[2]) && $group->getEffect3() && method_exists($group->getEffect3(), $setter)) {
                     $group->getEffect3()->{$setter}($parts[2]);
                 }
+            } else {
+                $translation->setMainEffect(null);
+                if ($locale === 'en-us') {
+                    $group->setEffect1(null);
+                    $group->setEffect2(null);
+                    $group->setEffect3(null);
+                }
             }
             if (array_key_exists('ECHO_EFFECT', $elements)) {
                 $translation->setEchoEffect($elements['ECHO_EFFECT']);
-                if ($locale === 'fr-fr') {
-                    $group->setEchoEffect($elements['ECHO_EFFECT']);
-                }
+            } else {
+                $translation->setEchoEffect(null);
             }
         }
 

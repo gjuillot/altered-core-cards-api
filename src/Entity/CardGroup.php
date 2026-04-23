@@ -120,9 +120,6 @@ class CardGroup implements TimestampInterface
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
     private ?int $forestPower = null;
 
-    #[ORM\Column(type: 'text', nullable: true)]
-    private ?string $echoEffect = null;
-
     #[ORM\Column(type: 'string', nullable: true)]
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
     private ?string $permanent = null;
@@ -298,9 +295,6 @@ class CardGroup implements TimestampInterface
 
     public function getForestPower(): ?int { return $this->forestPower; }
     public function setForestPower(?int $v): self { $this->forestPower = $v; return $this; }
-
-    public function getEchoEffect(): ?string { return $this->echoEffect; }
-    public function setEchoEffect(?string $v): self { $this->echoEffect = $v; return $this; }
 
     public function getPermanent(): ?string { return $this->permanent; }
     public function setPermanent(?string $v): self { $this->permanent = $v; return $this; }
