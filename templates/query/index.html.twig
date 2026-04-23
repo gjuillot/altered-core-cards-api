@@ -355,6 +355,7 @@
                         <option value="">—</option>
                         <option value="cardNumber:asc">N° ↑</option>
                         <option value="cardNumber:desc">N° ↓</option>
+                        <option value="random:asc">Random</option>
                         <option value="mainCost:asc">{{ 'query.label.main_cost'|trans }} ↑</option>
                         <option value="mainCost:desc">{{ 'query.label.main_cost'|trans }} ↓</option>
                         <option value="recallCost:asc">{{ 'query.label.recall_cost'|trans }} ↑</option>
@@ -779,7 +780,11 @@
             const sep = sortVal.lastIndexOf(':');
             const field = sortVal.slice(0, sep);
             const dir   = sortVal.slice(sep + 1);
-            params.set(`order[${field}]`, dir);
+            if (field === 'random') {
+                params.set('random', 'true');
+            } else {
+                params.set(`order[${field}]`, dir);
+            }
         }
 
         // Effect slots

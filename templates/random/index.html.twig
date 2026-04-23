@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="{{ app.request.locale }}" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'random.title'|trans }} — Altered Core</title>
+    <script>
+        if (localStorage.theme === 'light' || (!('theme' in localStorage) && !window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/gh/PolluxTroy0/Altered-Card-Renderer@main/altered-card-renderer.js"
+            data-proxy="false"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        .dark .ts-wrapper .ts-control {
+            background: rgb(55 65 81);
+            border-color: rgb(75 85 99);
+            color: rgb(255 255 255);
+        }
+        .dark .ts-wrapper .ts-control .item {
+            background: rgb(30 58 138);
+            color: rgb(147 197 253);
+        }
+        .dark .ts-wrapper .ts-control input { color: rgb(255 255 255); }
+        .dark .ts-wrapper .ts-control input::placeholder { color: rgb(156 163 175); }
+        .dark .ts-dropdown {
+            background: rgb(31 41 55);
+            border-color: rgb(75 85 99);
+            color: rgb(209 213 219);
+        }
+        .dark .ts-dropdown .option.active { background: rgb(30 58 138); color: rgb(147 197 253); }
+    </style>
+</head>
+<body class="bg-gray-900 dark:bg-black antialiased text-sm">
+
+<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 fixed w-full z-30 top-0">
+    <div class="px-4 py-3 lg:px-6 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <span class="text-xl font-bold text-gray-900 dark:text-white">Altered Core</span>
+            <span class="text-gray-400">/</span>
+            <span class="text-sm text-gray-500 dark:text-gray-400">{{ 'random.title'|trans }}</span>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="{{ path('query') }}"
+               class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950 rounded">
+                {{ 'random.go_query'|trans }}
+            </a>
+            <div class="flex items-center gap-1 text-xs">
+                <a href="{{ path('switch_locale', {locale: 'fr'}) }}"
+                   class="px-1.5 py-0.5 rounded font-medium {{ app.request.locale == 'fr' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200' }}">
+                    FR
+                </a>
+                <span class="text-gray-300 dark:text-gray-600">/</span>
+                <a href="{{ path('switch_locale', {locale: 'en'}) }}"
+                   class="px-1.5 py-0.5 rounded font-medium {{ app.request.locale == 'en' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200' }}">
+                    EN
+                </a>
+            </div>
+            <button id="theme-toggle" class="p-2 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+            <svg id="icon-sun" class="hidden w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+            </svg>
+            <svg id="icon-moon" class="hidden w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="pt-16 px-4 py-6 lg:px-8">
+    <div class="flex gap-4 items-start">
+
+    <div class="w-1/4 space-y-3">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{{ 'random.filters'|trans }}</h3>
+            <div class="space-y-2">
+                <div>
+                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">{{ 'random.nb_cards'|trans }}</label>
+                    <input type="number" id="count" min="1" max="100" value="10"
+                           class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded p-1.5">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">{{ 'random.faction'|trans }}</label>
+                    <select id="faction" multiple
+                            class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded p-1.5">
+                        <option value="">{{ 'random.all'|trans }}</option>
+                        {% for faction in factions %}
+                            <option value="{{ faction.code }}">{{ faction.name }} ({{ faction.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">{{ 'random.set'|trans }}</label>
+                    <select id="set" multiple
+                            class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded p-1.5">
+                        <option value="">{{ 'random.all'|trans }}</option>
+                        {% for set in sets %}
+                            <option value="{{ set.reference }}">{{ set.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">{{ 'random.rarity'|trans }}</label>
+                    <select id="rarity" multiple
+                            class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded p-1.5">
+                        <option value="">{{ 'random.all'|trans }}</option>
+                        {% for rarity in rarities %}
+                            <option value="{{ rarity.reference }}">{{ rarity.name.fr ?? rarity.reference }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex gap-2">
+            <button id="btn-generate"
+                    class="flex-1 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                {{ 'random.generate'|trans }}
+            </button>
+            <button id="btn-shuffle"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600">
+                {{ 'random.shuffle'|trans }}
+            </button>
+        </div>
+
+        <div id="error" class="hidden bg-red-900/50 border border-red-700 text-red-200 text-xs rounded p-2"></div>
+    </div>
+
+    <div class="w-3/4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="cards-container">
+            <div class="text-center text-gray-500 dark:text-gray-400 py-12">
+                {{ 'random.hint'|trans }}
+            </div>
+        </div>
+    </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+    const BASE = '{{ baseUrl }}';
+    const displayLocale = '{{ app.request.locale }}';
+
+    const T = {
+        loading: {{ 'random.loading'|trans|json_encode(constant('JSON_HEX_TAG'))|raw }},
+        no_results: {{ 'random.no_results'|trans|json_encode(constant('JSON_HEX_TAG'))|raw }},
+        duplicate: {{ 'random.duplicate'|trans|json_encode(constant('JSON_HEX_TAG'))|raw }},
+    };
+
+    const html = document.documentElement;
+    const iconSun = document.getElementById('icon-sun');
+    const iconMoon = document.getElementById('icon-moon');
+
+    function applyTheme() {
+        const dark = html.classList.contains('dark');
+        iconSun.classList.toggle('hidden', !dark);
+        iconMoon.classList.toggle('hidden', dark);
+    }
+    applyTheme();
+
+    document.getElementById('theme-toggle').addEventListener('click', () => {
+        html.classList.toggle('dark');
+        localStorage.theme = html.classList.contains('dark') ? 'dark' : 'light';
+        applyTheme();
+    });
+
+    let shownCards = [];
+    let tomSelectInstances = [];
+
+    function initTomSelects() {
+        document.querySelectorAll('select[multiple]').forEach(el => {
+            if (el.tomselect) return;
+            const ts = new TomSelect(el, {
+                plugins: ['remove_button'],
+                create: false,
+                maxItems: null,
+            });
+            tomSelectInstances.push(ts);
+        });
+    }
+
+    function buildParams() {
+        const params = new URLSearchParams();
+        params.set('random', 'true');
+        params.set('itemsPerPage', document.getElementById('count').value || '10');
+
+        const factionSel = document.getElementById('faction');
+        const factionVals = Array.from(factionSel.querySelectorAll('option:checked')).map(o => o.value).filter(Boolean);
+        factionVals.forEach(v => params.append('faction.code[]', v));
+
+        const setSel = document.getElementById('set');
+        const setVals = Array.from(setSel.querySelectorAll('option:checked')).map(o => o.value).filter(Boolean);
+        setVals.forEach(v => params.append('set.reference[]', v));
+
+        const raritySel = document.getElementById('rarity');
+        const rarityVals = Array.from(raritySel.querySelectorAll('option:checked')).map(o => o.value).filter(Boolean);
+        rarityVals.forEach(v => params.append('rarity[]', v));
+
+        return params;
+    }
+
+    function renderCards(cards) {
+        const container = document.getElementById('cards-container');
+        container.innerHTML = '';
+
+        if (cards.length === 0) {
+            container.innerHTML = `<div class="text-center text-gray-500 dark:text-gray-400 py-12">${T.no_results}</div>`;
+            return;
+        }
+
+        const apiBase = window.location.origin;
+        const apiTemplate = `${apiBase}/api/cards/reference/{ref}?locale={locale}`;
+
+        cards.forEach(card => {
+            const ref = card.reference;
+            if (!ref) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'grid grid-cols-2 gap-0.5';
+
+            const apiTemplate = `${window.location.origin}/api/cards/reference/{ref}?locale={locale}`;
+
+            const imgOrig = document.createElement('img');
+            imgOrig.src = card.imagePath?.[displayLocale] || card.imagePath?.en || '';
+            imgOrig.className = 'w-full object-cover';
+            imgOrig.loading = 'lazy';
+
+            const imgGen = document.createElement('altered-card');
+            imgGen.setAttribute('ref', ref);
+            imgGen.setAttribute('api', apiTemplate);
+            imgGen.setAttribute('locale', displayLocale);
+
+            wrapper.append(imgOrig, imgGen);
+            container.appendChild(wrapper);
+        });
+
+        shownCards = cards;
+    }
+
+    async function fetchCards() {
+        const errorDiv = document.getElementById('error');
+        errorDiv.classList.add('hidden');
+
+        const loading = document.createElement('div');
+        const container = document.getElementById('cards-container');
+        loading.className = 'text-center text-gray-500 dark:text-gray-400 py-12';
+        loading.textContent = T.loading;
+        container.innerHTML = '';
+        container.appendChild(loading);
+
+        try {
+            const qs = buildParams().toString();
+            const resp = await fetch(BASE + '?' + qs, { headers: { Accept: 'application/json' } });
+            const data = await resp.json();
+
+            if (!resp.ok) {
+                errorDiv.classList.remove('hidden');
+                errorDiv.textContent = data.detail ?? JSON.stringify(data);
+                return;
+            }
+
+            const cards = data['member'] ?? [];
+            renderCards(cards);
+        } catch (e) {
+            errorDiv.classList.remove('hidden');
+            errorDiv.textContent = e.message;
+        }
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function shuffleCards() {
+        if (shownCards.length > 0) {
+            const shuffled = shuffleArray([...shownCards]);
+            renderCards(shuffled);
+        }
+    }
+
+    document.getElementById('btn-generate').addEventListener('click', fetchCards);
+    document.getElementById('btn-shuffle').addEventListener('click', shuffleCards);
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initTomSelects();
+    });
+})();
+</script>
+</body>
+</html>

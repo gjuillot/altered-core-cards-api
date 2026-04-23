@@ -43,6 +43,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
             name: 'get_card_by_reference',
         ),
         new GetCollection(
+            name: 'api_cards_collection',
             provider: \App\State\CardCollectionProvider::class,
             normalizationContext: ['groups' => ['card:list']],
             cacheHeaders: ['max_age' => 3600, 'shared_max_age' => 3600, 'vary' => ['Accept', 'Accept-Language']],
@@ -69,8 +70,9 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     'mainCost', 'recallCost', 'oceanPower', 'mountainPower', 'forestPower',
 ])]
 #[ApiFilter(\App\Filter\CardNameFilter::class, properties: ['name'])]
-#[ApiFilter(OrderFilter::class, properties: ['cardNumber', 'set.date'])]
+#[ApiFilter(OrderFilter::class, properties: ['cardNumber', 'set.date', 'random'])]
 #[ApiFilter(\App\Filter\CardGroupOrderFilter::class, properties: ['mainCost', 'recallCost', 'oceanPower', 'mountainPower', 'forestPower'])]
+#[ApiFilter(\App\Filter\RandomCardFilter::class)]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType' => 'cardGroup'])]
 #[ApiFilter(\App\Filter\EffectKeywordFilter::class, properties: ['effectKeyword' => 'cardGroup'])]
 #[ApiFilter(\App\Filter\HasNoEffectFilter::class, properties: ['hasNoEffect' => 'cardGroup'])]

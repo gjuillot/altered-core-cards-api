@@ -126,3 +126,19 @@ admin:
     reset_btn: Réinitialiser
   pagination:
     page_of: "Page %page% sur %total%"
+
+random:
+  title: Random
+  go_query: Requête
+  filters: Filtres
+  nb_cards: "Nombre de cartes"
+  faction: Faction
+  set: Set
+  rarity: Rarité
+  all: Tous
+  generate: Générer
+  shuffle: Mélanger
+  hint: "Cliquez sur « Générer » pour piocher des cartes aléatoires"
+  loading: Chargement…
+  no_results: "Aucune carte trouvée"
+  duplicate: Doublon
