@@ -126,3 +126,19 @@ homepage:
   section_factions: Factions
   footer_text: "Altered Core API — Community project. Not affiliated with Equinox."
   footer_link: "API Documentation →"
+
+random:
+  title: Random
+  go_query: Query
+  filters: Filters
+  nb_cards: Number of cards
+  faction: Faction
+  set: Set
+  rarity: Rarity
+  all: All
+  generate: Generate
+  shuffle: Shuffle
+  hint: Click "Generate" to draw random cards
+  loading: Loading…
+  no_results: No cards found
+  duplicate: Duplicate

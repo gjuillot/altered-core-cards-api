@@ -28,6 +28,7 @@ doctrine:
         dql:
             string_functions:
                 JSONB_CONTAINS: App\Doctrine\Function\JsonbContains
+                RANDOM: App\Doctrine\Function\Random
         controller_resolver:
             auto_mapping: false
 
