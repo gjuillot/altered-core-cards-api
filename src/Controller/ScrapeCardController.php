@@ -7,7 +7,9 @@ use App\Entity\Card;
 use App\Repository\CardRepository;
 use App\Service\CardScraperService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,6 +24,8 @@ final class ScrapeCardController extends AbstractController
         private readonly CardRepository $cardRepository,
         private readonly CardBuilder $cardBuilder,
         private readonly SerializerInterface $serializer,
+        #[Autowire(service: 'cache.card_counts')]
+        private readonly CacheItemPoolInterface $cardCountsCache,
     ) {}
 
     #[Route('/api/cards/scrape/{reference}', name: 'card_scrape', methods: ['GET'])]
@@ -48,6 +52,7 @@ final class ScrapeCardController extends AbstractController
         $this->em->persist($card);
         $this->cardBuilder->reconcileNewEffects($this->em);
         $this->em->flush();
+        $this->cardCountsCache->clear();
 
         $locale  = $request->query->get('locale');
         $context = ['groups' => ['card:read']];

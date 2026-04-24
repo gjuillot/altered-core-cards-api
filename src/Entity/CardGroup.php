@@ -37,7 +37,6 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
         new GetCollection(
             provider: \App\State\CardGroupCollectionProvider::class,
             normalizationContext: ['groups' => ['card_group:read']],
-            cacheHeaders: ['max_age' => 3600, 'shared_max_age' => 3600, 'vary' => ['Accept', 'Accept-Language']],
             paginationFetchJoinCollection: false,
         ),
     ],
