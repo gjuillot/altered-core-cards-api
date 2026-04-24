@@ -56,6 +56,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     'isSuspended'            => 'exact',
     'rarity.reference'    => 'exact',
     'cards.set.reference' => 'exact',
+    'cards.reference'   => 'exact',
 ])]
 #[ApiFilter(ReferenceFilter::class, properties: ['cardType', 'subTypes'])]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType'])]
