@@ -6,6 +6,7 @@ use ApiPlatform\Doctrine\Orm\State\CollectionProvider;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\Pagination\PaginatorInterface;
 use ApiPlatform\State\ProviderInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -24,6 +25,7 @@ final class CachedCountCollectionProvider implements ProviderInterface
 
     public function __construct(
         private readonly CollectionProvider $inner,
+        #[Autowire(service: 'cache.card_counts')]
         private readonly CacheInterface $cache,
     ) {}
 
