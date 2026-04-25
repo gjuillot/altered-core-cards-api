@@ -9,6 +9,9 @@ security:
                 property: email
 
     firewalls:
+        metrics:
+            pattern: ^/metrics
+            security: false
         dev:
             pattern: ^/(_profiler|_wdt|assets|build)/
             security: false

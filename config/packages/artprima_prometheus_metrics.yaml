@@ -1,5 +1,6 @@
 artprima_prometheus_metrics:
     namespace: altered_core
+    disable_default_metrics: true
     storage:
         type: apcu
 
