@@ -1,0 +1,29 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: self-hosted
+
+    steps:
+      - name: Deploy via SSH
+        run: |
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          ssh -i /tmp/deploy_key \
+              -o StrictHostKeyChecking=no \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              "
+                set -e
+                cd ${{ secrets.APP_DIR }}
+                git pull origin main
+                COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction
+                php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+                php bin/console cache:clear --env=prod
+                php bin/console cache:warmup --env=prod
+                sudo /usr/bin/systemctl reload php8.4-fpm
+              "
+          rm -f /tmp/deploy_key
