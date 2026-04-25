@@ -38,7 +38,12 @@ final class PrometheusMetricsSubscriber implements EventSubscriberInterface
         $request  = $event->getRequest();
         $response = $event->getResponse();
 
-        $route      = $request->attributes->getString('_route') ?: 'unknown';
+        $route = $request->attributes->getString('_route') ?: 'unknown';
+
+        if ($route === 'prometheus_bundle_prometheus') {
+            return;
+        }
+
         $method     = $request->getMethod();
         $statusCode = (string) $response->getStatusCode();
         $duration   = microtime(true) - ($this->startTime ?? microtime(true));
