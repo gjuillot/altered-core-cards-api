@@ -13,6 +13,15 @@
             "src/ApiResource/.gitignore"
         ]
     },
+    "artprima/prometheus-metrics-bundle": {
+        "version": "1.21",
+        "recipe": {
+            "repo": "github.com/symfony/recipes-contrib",
+            "branch": "main",
+            "version": "1.21",
+            "ref": "744712c8112617ad624db495c3dd45336d737377"
+        }
+    },
     "doctrine/deprecations": {
         "version": "1.1",
         "recipe": {

@@ -10,6 +10,9 @@
 controllers:
     resource: routing.controllers
 
+prometheus_metrics:
+    resource: '@ArtprimaPrometheusMetricsBundle/Resources/config/routing.yaml'
+
 api_login:
     path: /api/auth/login
     methods: [POST]

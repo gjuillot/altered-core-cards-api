@@ -19,6 +19,8 @@ services:
     App\:
         resource: '../src/'
 
+    Prometheus\CollectorRegistry: '@prometheus_metrics_bundle.collector_registry'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
