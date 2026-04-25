@@ -1,0 +1,11 @@
+artprima_prometheus_metrics:
+    namespace: altered_core
+    storage:
+        type: apcu
+
+when@prod:
+    artprima_prometheus_metrics:
+        namespace: altered_core
+        storage:
+            type: redis
+            url: '%env(REDIS_URL)%'
