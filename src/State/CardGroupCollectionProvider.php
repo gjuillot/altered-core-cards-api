@@ -85,7 +85,17 @@ final class CardGroupCollectionProvider implements ProviderInterface
             ->getQuery()
             ->getResult();
 
-        // Query 3 — cardRulings (OneToMany)
+        // Query 3 — translations (OneToMany — no longer EAGER on entity, loaded here)
+        $this->em->createQueryBuilder()
+            ->select('cg, t')
+            ->from(CardGroup::class, 'cg')
+            ->leftJoin('cg.translations', 't')
+            ->where('cg.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->getQuery()
+            ->getResult();
+
+        // Query 4 — cardRulings (OneToMany)
         $this->em->createQueryBuilder()
             ->select('cg, cr')
             ->from(CardGroup::class, 'cg')
@@ -95,7 +105,7 @@ final class CardGroupCollectionProvider implements ProviderInterface
             ->getQuery()
             ->getResult();
 
-        // Query 4 — loreEntries (OneToMany)
+        // Query 5 — loreEntries (OneToMany)
         $this->em->createQueryBuilder()
             ->select('cg, le')
             ->from(CardGroup::class, 'cg')
@@ -105,8 +115,7 @@ final class CardGroupCollectionProvider implements ProviderInterface
             ->getQuery()
             ->getResult();
 
-        // Query 5 — cards + set (OneToMany + ManyToOne on cards)
-        // c.translations are EAGER and will be loaded automatically by Doctrine
+        // Query 6 — cards + set (OneToMany + ManyToOne on cards)
         $this->em->createQueryBuilder()
             ->select('cg, c, cs')
             ->from(CardGroup::class, 'cg')
@@ -116,9 +125,6 @@ final class CardGroupCollectionProvider implements ProviderInterface
             ->setParameter('ids', $ids)
             ->getQuery()
             ->getResult();
-
-        // cg.translations and c.translations are EAGER — Doctrine loads them
-        // automatically with IN() queries, no explicit join needed.
 
         return $result;
     }

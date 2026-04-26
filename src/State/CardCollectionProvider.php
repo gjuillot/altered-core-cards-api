@@ -84,7 +84,17 @@ final class CardCollectionProvider implements ProviderInterface
             ->getQuery()
             ->getResult();
 
-        // Query 2 — artists (ManyToMany) — separate query to avoid Cartesian product
+        // Query 2 — translations (OneToMany — no longer EAGER on entity)
+        $this->em->createQueryBuilder()
+            ->select('c, t')
+            ->from(Card::class, 'c')
+            ->leftJoin('c.translations', 't')
+            ->where('c.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->getQuery()
+            ->getResult();
+
+        // Query 3 — artists (ManyToMany) — separate query to avoid Cartesian product
         $this->em->createQueryBuilder()
             ->select('c, a')
             ->from(Card::class, 'c')

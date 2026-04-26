@@ -54,10 +54,10 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     'isBanned'               => 'exact',
     'isErrated'              => 'exact',
     'isSuspended'            => 'exact',
-    'rarity.reference'    => 'exact',
-    'cards.set.reference' => 'exact',
-    'cards.reference'   => 'exact',
+    'rarity.reference'  => 'exact',
 ])]
+#[ApiFilter(\App\Filter\CardGroupSetFilter::class)]
+#[ApiFilter(\App\Filter\CardGroupCardReferenceFilter::class)]
 #[ApiFilter(ReferenceFilter::class, properties: ['cardType', 'subTypes'])]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType'])]
 #[ApiFilter(\App\Filter\EffectKeywordFilter::class, properties: ['effectKeyword'])]
@@ -86,14 +86,17 @@ class CardGroup implements TimestampInterface
 
     #[ORM\ManyToOne(targetEntity: Faction::class)]
     #[Groups(['card_group:read', 'card:list', 'card:read', 'card_group:read:detail'])]
+    #[ApiProperty(fetchEager: false)]
     private ?Faction $faction = null;
 
     #[ORM\ManyToOne(targetEntity: Rarity::class, cascade: ['persist'])]
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
     private ?Rarity $rarity = null;
 
     #[ORM\ManyToOne(targetEntity: CardType::class, cascade: ['persist'])]
     #[Groups(['card_group:read', 'card_group:read:detail', 'card:list', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
     private ?CardType $cardType = null;
 
     #[ORM\ManyToMany(targetEntity: CardSubType::class, cascade: ['persist'])]
@@ -165,7 +168,7 @@ class CardGroup implements TimestampInterface
     #[ORM\OneToMany(targetEntity: LoreEntry::class, mappedBy: 'cardGroup', cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $loreEntries;
 
-    #[ORM\OneToMany(targetEntity: CardGroupTranslation::class, mappedBy: 'cardGroup', cascade: ['persist'], fetch: 'EAGER')]
+    #[ORM\OneToMany(targetEntity: CardGroupTranslation::class, mappedBy: 'cardGroup', cascade: ['persist'])]
     private Collection $translations;
 
     #[ORM\OneToMany(targetEntity: Card::class, mappedBy: 'cardGroup')]
