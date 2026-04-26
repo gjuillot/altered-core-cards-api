@@ -18,3 +18,8 @@
 /assets/vendor/
 ###< symfony/asset-mapper ###
 /.claude/
+
+###> phpunit/phpunit ###
+/phpunit.xml
+/.phpunit.cache/
+###< phpunit/phpunit ###

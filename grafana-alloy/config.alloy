@@ -1,0 +1,46 @@
+// Symfony app — métriques API
+prometheus.scrape "symfony_app" {
+  targets = [
+    {"__address__" = "cards.alteredcore.org:443"},
+  ]
+  scheme          = "https"
+  metrics_path    = "/metrics/prometheus"
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+  forward_to      = [prometheus.remote_write.metrics_service.receiver]
+}
+
+// Serveur Linux — métriques système
+prometheus.exporter.unix "node" {
+  disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]
+}
+
+discovery.relabel "node" {
+  targets = prometheus.exporter.unix.node.targets
+  rule {
+    target_label = "instance"
+    replacement  = constants.hostname
+  }
+  rule {
+    target_label = "job"
+    replacement  = "integrations/node_exporter"
+  }
+}
+
+prometheus.scrape "node" {
+  targets         = discovery.relabel.node.output
+  forward_to      = [prometheus.remote_write.metrics_service.receiver]
+  scrape_interval = "60s"
+}
+
+// Push vers Grafana Cloud — à configurer avec les credentials du stack
+prometheus.remote_write "metrics_service" {
+  endpoint {
+    url = env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+    basic_auth {
+      username = env("GRAFANA_CLOUD_USER")
+      password = env("GRAFANA_CLOUD_APIKEY")
+    }
+  }
+}

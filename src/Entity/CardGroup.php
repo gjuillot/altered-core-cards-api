@@ -29,6 +29,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ORM\Index(name: "idx_card_group_is_banned", fields: ["isBanned"])]
 #[ORM\Index(name: "idx_card_group_is_suspended", fields: ["isSuspended"])]
 #[ORM\Index(name: "idx_card_group_is_errated", fields: ["isErrated"])]
+#[ORM\Index(name: "idx_card_group_rarity", fields: ["rarity"])]
 #[ORM\Index(name: "idx_card_group_faction_rarity", fields: ["faction", "rarity"])]
 #[ORM\Entity(repositoryClass: CardGroupRepository::class)]
 #[ApiResource(
@@ -128,18 +129,22 @@ class CardGroup implements TimestampInterface
 
     #[ORM\ManyToOne(targetEntity: MainEffect::class)]
     #[Groups(['card_group:read', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
     private ?MainEffect $effect1 = null;
 
     #[ORM\ManyToOne(targetEntity: MainEffect::class)]
     #[Groups(['card_group:read', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
     private ?MainEffect $effect2 = null;
 
     #[ORM\ManyToOne(targetEntity: MainEffect::class)]
     #[Groups(['card_group:read', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
     private ?MainEffect $effect3 = null;
 
     #[ORM\ManyToOne(targetEntity: CardHistoryStatus::class, cascade: ['persist'])]
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
     private ?CardHistoryStatus $cardHistoryStatus = null;
 
     #[ORM\Column(type: 'boolean', nullable: false)]
