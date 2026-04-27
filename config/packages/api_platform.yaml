@@ -2,7 +2,7 @@ api_platform:
     title: Altered Core API
     version: 1.0.0
     eager_loading:
-        force_eager: false
+        enabled: false
     defaults:
         stateless: true
         cache_headers:
