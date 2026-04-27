@@ -8,11 +8,16 @@ use ApiPlatform\Metadata\Operation;
 use Doctrine\ORM\QueryBuilder;
 
 /**
- * Allows filtering on relation reference fields using a flat query parameter.
- * e.g. ?rarity=COMMON maps to WHERE rarity.reference = 'COMMON'
+ * Resolves relation lookup fields to IDs before the main query, so PostgreSQL
+ * can use FK indexes directly instead of generating a Nested Loop subquery.
  *
- * Usage:
- * #[ApiFilter(ReferenceFilter::class, properties: ['rarity', 'cardType'])]
+ * Default usage — looks up by `reference` field:
+ *   #[ApiFilter(ReferenceFilter::class, properties: ['rarity', 'cardType'])]
+ *   → ?rarity=COMMON  →  WHERE rarity_id IN (2)
+ *
+ * Custom lookup field — use a keyed property with the field name as value:
+ *   #[ApiFilter(ReferenceFilter::class, properties: ['faction' => 'code'])]
+ *   → ?faction=LY  →  WHERE faction_id IN (3)
  */
 final class ReferenceFilter extends AbstractFilter
 {
@@ -29,36 +34,56 @@ final class ReferenceFilter extends AbstractFilter
             return;
         }
 
-        $alias     = $queryBuilder->getRootAliases()[0];
+        $alias = $queryBuilder->getRootAliases()[0];
+
+        $em          = $this->getManagerRegistry()->getManagerForClass($resourceClass);
+        $metadata    = $em->getClassMetadata($resourceClass);
+        $targetClass = $metadata->getAssociationTargetClass($property);
+        $lookupField = $this->getLookupField($property);
+
+        $ids = $em->createQuery(sprintf('SELECT t.id FROM %s t WHERE t.%s IN (:refs)', $targetClass, $lookupField))
+            ->setParameter('refs', (array) $value)
+            ->getSingleColumnResult();
+
+        if (empty($ids)) {
+            $queryBuilder->andWhere('1 = 0');
+            return;
+        }
+
         $paramName = $queryNameGenerator->generateParameterName($property);
 
-        $metadata      = $this->getManagerRegistry()->getManagerForClass($resourceClass)->getClassMetadata($resourceClass);
-        $targetClass   = $metadata->getAssociationTargetClass($property);
-        $subAlias      = $queryNameGenerator->generateJoinAlias($property);
-
-        $subDql = sprintf(
-            'SELECT %s.id FROM %s %s WHERE %s.reference IN (:%s)',
-            $subAlias, $targetClass, $subAlias, $subAlias, $paramName,
-        );
-
         $queryBuilder
-            ->andWhere(sprintf('IDENTITY(%s.%s) IN (%s)', $alias, $property, $subDql))
-            ->setParameter($paramName, (array) $value);
+            ->andWhere(sprintf('IDENTITY(%s.%s) IN (:%s)', $alias, $property, $paramName))
+            ->setParameter($paramName, $ids);
     }
 
     public function getDescription(string $resourceClass): array
     {
         $description = [];
 
-        foreach ($this->properties as $property => $strategy) {
+        foreach ($this->properties ?? [] as $key => $val) {
+            $property    = is_string($key) ? $key : (string) $val;
+            $lookupField = is_string($key) && is_string($val) && $val !== '' ? $val : 'reference';
+
             $description[$property] = [
-                'property' => $property,
-                'type'     => 'string',
-                'required' => false,
-                'description' => sprintf('Filter by %s reference (e.g. %s=COMMON)', $property, $property),
+                'property'    => $property,
+                'type'        => 'string',
+                'required'    => false,
+                'description' => sprintf('Filter by %s %s', $property, $lookupField),
             ];
         }
 
         return $description;
+    }
+
+    private function getLookupField(string $property): string
+    {
+        foreach ($this->properties ?? [] as $key => $val) {
+            if (is_string($key) && $key === $property) {
+                return is_string($val) && $val !== '' ? $val : 'reference';
+            }
+        }
+
+        return 'reference';
     }
 }

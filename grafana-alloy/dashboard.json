@@ -25,6 +25,42 @@
           "value": "$__all"
         },
         "refresh": 2
+      },
+      {
+        "name": "window",
+        "type": "custom",
+        "label": "Fenêtre",
+        "query": "5m,15m,1h,6h,12h,24h",
+        "current": {
+          "text": "1h",
+          "value": "1h"
+        },
+        "options": [
+          { "text": "5m",  "value": "5m"  },
+          { "text": "15m", "value": "15m" },
+          { "text": "1h",  "value": "1h"  },
+          { "text": "6h",  "value": "6h"  },
+          { "text": "12h", "value": "12h" },
+          { "text": "24h", "value": "24h" }
+        ],
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "name": "status",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus"
+        },
+        "query": "label_values(altered_core_http_requests_total, status)",
+        "label": "Statut HTTP",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
       }
     ]
   },
@@ -136,7 +172,7 @@
     },
     {
       "id": 4,
-      "title": "Total requ\u00eates (derni\u00e8re heure)",
+      "title": "Total requ\u00eates (${window})",
       "type": "stat",
       "gridPos": {
         "x": 16,
@@ -146,7 +182,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(altered_core_http_requests_total[1h]))",
+          "expr": "sum(increase(altered_core_http_requests_total{route=~\"$route\",status=~\"$status\"}[$window]))",
           "legendFormat": "Total"
         }
       ],
@@ -177,7 +213,7 @@
     },
     {
       "id": 5,
-      "title": "Erreurs 5xx (derni\u00e8re heure)",
+      "title": "Erreurs 5xx (${window})",
       "type": "stat",
       "gridPos": {
         "x": 20,
@@ -187,7 +223,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(altered_core_http_requests_total{status=~\"5..\"}[1h]))",
+          "expr": "sum(increase(altered_core_http_requests_total{route=~\"$route\",status=~\"5..\"}[$window]))",
           "legendFormat": "Erreurs"
         }
       ],
@@ -312,7 +348,7 @@
     },
     {
       "id": 8,
-      "title": "R\u00e9partition par code HTTP",
+      "title": "R\u00e9partition par code HTTP (${window})",
       "type": "piechart",
       "gridPos": {
         "x": 0,
@@ -322,7 +358,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (status) (increase(altered_core_http_requests_total[1h]))",
+          "expr": "sum by (status) (increase(altered_core_http_requests_total{route=~\"$route\"}[$window]))",
           "legendFormat": "HTTP {{status}}"
         }
       ],

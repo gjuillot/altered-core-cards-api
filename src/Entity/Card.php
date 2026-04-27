@@ -29,6 +29,8 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ORM\Index(name: "idx_card_rarity_id", fields: ["rarity", "id"])]
 #[ORM\Index(name: "idx_card_card_group", fields: ["cardGroup"])]
 #[ORM\Index(name: "idx_card_card_number", fields: ["cardNumber"])]
+#[ORM\Index(name: "idx_card_set_card_group", fields: ["set", "cardGroup"])]
+#[ORM\Index(name: "idx_card_card_group_set", fields: ["cardGroup", "set"])]
 #[ORM\Index(name: "idx_card_is_serialized", fields: ["isSerialized"])]
 #[ORM\Entity(repositoryClass: CardRepository::class)]
 #[Gedmo\TranslationEntity(class: CardTranslation::class)]
@@ -82,6 +84,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\EffectSlotFilter::class, properties: ['effectSlot'])]
 #[ApiFilter(\App\Filter\ArtistFilter::class)]
 #[ApiFilter(\App\Filter\BgaQueryFilter::class, properties: ['bga' => 'exact'])]
+#[ApiFilter(\App\Filter\AfterIdFilter::class, properties: ['afterId'])]
 class Card implements TimestampInterface
 {
     use TimestampTrait;

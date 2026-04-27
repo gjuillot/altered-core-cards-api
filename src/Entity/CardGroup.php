@@ -46,21 +46,19 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     paginationItemsPerPage: 30,
 )]
 #[ApiFilter(SearchFilter::class, properties: [
-    'slug'                   => 'exact',
-    'faction.code'           => 'exact',
-    'mainCost'               => 'exact',
-    'recallCost'             => 'exact',
-    'oceanPower'             => 'exact',
-    'mountainPower'          => 'exact',
-    'forestPower'            => 'exact',
-    'isBanned'               => 'exact',
-    'isErrated'              => 'exact',
-    'isSuspended'            => 'exact',
-    'rarity.reference'  => 'exact',
+    'slug'         => 'exact',
+    'mainCost'     => 'exact',
+    'recallCost'   => 'exact',
+    'oceanPower'   => 'exact',
+    'mountainPower'=> 'exact',
+    'forestPower'  => 'exact',
+    'isBanned'     => 'exact',
+    'isErrated'    => 'exact',
+    'isSuspended'  => 'exact',
 ])]
 #[ApiFilter(\App\Filter\CardGroupSetFilter::class)]
 #[ApiFilter(\App\Filter\CardGroupCardReferenceFilter::class)]
-#[ApiFilter(ReferenceFilter::class, properties: ['cardType', 'subTypes'])]
+#[ApiFilter(ReferenceFilter::class, properties: ['cardType', 'subTypes', 'rarity', 'faction' => 'code'])]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType'])]
 #[ApiFilter(\App\Filter\EffectKeywordFilter::class, properties: ['effectKeyword'])]
 #[ApiFilter(\App\Filter\HasNoEffectFilter::class, properties: ['hasNoEffect'])]
@@ -68,6 +66,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\EffectSlotFilter::class, properties: ['effectSlot'])]
 #[ApiFilter(\App\Filter\CardNameFilter::class, properties: ['name'])]
 #[ApiFilter(OrderFilter::class, properties: ['mainCost', 'recallCost'])]
+#[ApiFilter(\App\Filter\AfterIdFilter::class, properties: ['afterId'])]
 class CardGroup implements TimestampInterface
 {
     use TimestampTrait;
