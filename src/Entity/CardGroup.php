@@ -24,6 +24,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ORM\Index(name: "idx_card_group_slug", fields: ["slug"])]
 #[ORM\Index(name: "idx_card_group_faction", fields: ["faction"])]
 #[ORM\Index(name: "idx_card_group_card_type", fields: ["cardType"])]
+#[ORM\Index(name: "idx_card_group_card_type_id", fields: ["cardType", "id"])]
 #[ORM\Index(name: "idx_card_group_main_cost", fields: ["mainCost"])]
 #[ORM\Index(name: "idx_card_group_recall_cost", fields: ["recallCost"])]
 #[ORM\Index(name: "idx_card_group_is_banned", fields: ["isBanned"])]
