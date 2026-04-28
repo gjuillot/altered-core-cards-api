@@ -7,6 +7,7 @@ use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Debug\FilterProfiler;
 use App\Entity\Card;
+use App\Entity\CardGroup;
 use App\Entity\CardGroupTranslation;
 use App\Search\SearchBackendInterface;
 use Doctrine\ORM\QueryBuilder;
@@ -53,7 +54,7 @@ final class CardNameFilter extends AbstractFilter
         }
 
         $root = $queryBuilder->getRootAliases()[0];
-        $isCardGroup = Card::class === $resourceClass;
+        $isCardGroup = CardGroup::class === $resourceClass;
 
         // ── Search backend fast path ─────────────────────────────────────────
         $this->profiler?->start('name', $this->searchBackend::class);
@@ -67,9 +68,16 @@ final class CardNameFilter extends AbstractFilter
             }
 
             $p = $queryNameGenerator->generateParameterName('search_ids');
-            $queryBuilder
-                ->andWhere("$root.id IN (:$p)")
-                ->setParameter($p, $ids);
+            $queryBuilder->setParameter($p, $ids);
+
+            if ($isCardGroup) {
+                // Meilisearch index stores Card IDs; resolve to CardGroups that have a matching card
+                $queryBuilder->andWhere(
+                    "EXISTS (SELECT 1 FROM " . Card::class . " _src WHERE _src.cardGroup = $root AND _src.id IN (:$p))"
+                );
+            } else {
+                $queryBuilder->andWhere("$root.id IN (:$p)");
+            }
 
             return;
         }
