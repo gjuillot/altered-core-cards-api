@@ -32,6 +32,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ORM\Index(name: "idx_card_set_card_group", fields: ["set", "cardGroup"])]
 #[ORM\Index(name: "idx_card_card_group_set", fields: ["cardGroup", "set"])]
 #[ORM\Index(name: "idx_card_is_serialized", fields: ["isSerialized"])]
+#[ORM\Index(name: "idx_card_collector_number", fields: ["collectorNumberFormatedId"])]
 #[ORM\Entity(repositoryClass: CardRepository::class)]
 #[Gedmo\TranslationEntity(class: CardTranslation::class)]
 #[ApiResource(
@@ -60,12 +61,13 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     paginationItemsPerPage: 30,
 )]
 #[ApiFilter(SearchFilter::class, properties: [
-    'reference'    => 'exact',
-    'set.reference'=> 'exact',
-    'kickstarter'  => 'exact',
-    'promo'        => 'exact',
-    'isSerialized' => 'exact',
-    'variation'    => 'exact',
+    'reference'                  => 'exact',
+    'set.reference'              => 'exact',
+    'kickstarter'                => 'exact',
+    'promo'                      => 'exact',
+    'isSerialized'               => 'exact',
+    'variation'                  => 'exact',
+    'collectorNumberFormatedId'  => 'exact',
 ])]
 #[ApiFilter(ReferenceFilter::class, properties: ['rarity'])]
 #[ApiFilter(CardGroupAliasFilter::class, properties: [
@@ -107,7 +109,7 @@ class Card implements TimestampInterface
     private int $cardNumber = 0;
 
     #[ORM\Column(length: 50, nullable: true)]
-    #[Groups(['card:read'])]
+    #[Groups(['card:list', 'card:read'])]
     private ?string $collectorNumberFormatedId = null;
 
     #[ORM\Column(nullable: true)]

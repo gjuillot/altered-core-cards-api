@@ -73,6 +73,9 @@ final class MeilisearchService
         $index = $this->getIndex();
         $index->updateSearchableAttributes(self::SEARCHABLE_ATTRIBUTES);
         $index->updateFilterableAttributes(self::FILTERABLE_ATTRIBUTES);
+        // Default maxTotalHits is 1000 — raise it so searches over large name groups
+        // (e.g. 1800+ serialized variants of the same card) return all matching IDs.
+        $index->updatePagination(['maxTotalHits' => 200000]);
     }
 
     /**
