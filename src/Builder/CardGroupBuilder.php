@@ -220,8 +220,8 @@ class CardGroupBuilder
         if ($locale === 'en-us') {
             if (array_key_exists('elements', $data)) {
                 $elements = $data['elements'];
-                $group->setMainCost(isset($elements['MAIN_COST']) ? (int) $elements['MAIN_COST'] : null);
-                $group->setRecallCost(isset($elements['RECALL_COST']) ? (int) $elements['RECALL_COST'] : null);
+                $group->setMainCost($this->parseCost($elements['MAIN_COST'] ?? null));
+                $group->setRecallCost($this->parseCost($elements['RECALL_COST'] ?? null));
                 $group->setOceanPower(isset($elements['OCEAN_POWER']) ? (int) $elements['OCEAN_POWER'] : null);
                 $group->setMountainPower(isset($elements['MOUNTAIN_POWER']) ? (int) $elements['MOUNTAIN_POWER'] : null);
                 $group->setForestPower(isset($elements['FOREST_POWER']) ? (int) $elements['FOREST_POWER'] : null);
@@ -452,6 +452,13 @@ class CardGroupBuilder
         }
 
         return $subType;
+    }
+
+    private function parseCost(?string $value): ?int
+    {
+        if ($value === null) return null;
+        $numeric = preg_replace('/\D/', '', $value);
+        return $numeric !== '' ? (int) $numeric : null;
     }
 
     private function findOrCreateHistoryStatus(array $data, string $locale): CardHistoryStatus
