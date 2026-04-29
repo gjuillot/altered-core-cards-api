@@ -29,6 +29,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ORM\Index(name: "idx_card_rarity_id", fields: ["rarity", "id"])]
 #[ORM\Index(name: "idx_card_card_group", fields: ["cardGroup"])]
 #[ORM\Index(name: "idx_card_card_number", fields: ["cardNumber"])]
+#[ORM\Index(name: "idx_card_set_card_number", fields: ["set", "cardNumber"])]
 #[ORM\Index(name: "idx_card_set_card_group", fields: ["set", "cardGroup"])]
 #[ORM\Index(name: "idx_card_card_group_set", fields: ["cardGroup", "set"])]
 #[ORM\Index(name: "idx_card_is_serialized", fields: ["isSerialized"])]
@@ -76,7 +77,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     'mainCost', 'recallCost', 'oceanPower', 'mountainPower', 'forestPower',
 ])]
 #[ApiFilter(\App\Filter\CardNameFilter::class, properties: ['name'])]
-#[ApiFilter(OrderFilter::class, properties: ['cardNumber', 'set.date', 'random'])]
+#[ApiFilter(OrderFilter::class, properties: ['cardNumber', 'collectorNumberFormatedId', 'set.date', 'random'])]
 #[ApiFilter(\App\Filter\CardGroupOrderFilter::class, properties: ['mainCost', 'recallCost', 'oceanPower', 'mountainPower', 'forestPower'])]
 #[ApiFilter(\App\Filter\RandomCardFilter::class)]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType' => 'cardGroup'])]
