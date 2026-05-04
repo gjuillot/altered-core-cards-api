@@ -154,6 +154,18 @@ class Card implements TimestampInterface
     #[Groups(['card:read'])]
     private bool $isOwnerless = false;
 
+    #[ORM\Column(type: "boolean", nullable: false)]
+    #[Groups(['card:read'])]
+    private bool $isExclusive = false;
+
+    #[ORM\Column(type: "float", nullable: true)]
+    #[Groups(['card:read'])]
+    private ?float $lowerPrice = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['card:list', 'card:read'])]
+    private ?string $cardProduct = null;
+
     /**
      * Printing variant: standard | alt-art | promo | kickstarter | serialized
      */
@@ -267,6 +279,15 @@ class Card implements TimestampInterface
 
     public function isOwnerless(): bool { return $this->isOwnerless; }
     public function setIsOwnerless(bool $v): self { $this->isOwnerless = $v; return $this; }
+
+    public function isExclusive(): bool { return $this->isExclusive; }
+    public function setIsExclusive(bool $v): self { $this->isExclusive = $v; return $this; }
+
+    public function getLowerPrice(): ?float { return $this->lowerPrice; }
+    public function setLowerPrice(?float $v): self { $this->lowerPrice = $v; return $this; }
+
+    public function getCardProduct(): ?string { return $this->cardProduct; }
+    public function setCardProduct(?string $v): self { $this->cardProduct = $v; return $this; }
 
     public function getVariation(): ?string { return $this->variation; }
     public function setVariation(?string $variation): self { $this->variation = $variation; return $this; }

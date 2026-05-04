@@ -32,6 +32,17 @@ class CardBuilder
         $this->cardGroupBuilder->reconcileNewEffects($em);
     }
 
+    public function computeSlug(array $data): string
+    {
+        return $this->cardGroupBuilder->computeSlug($data);
+    }
+
+    /** @param string[] $slugs  @param string[] $abilityKeys */
+    public function preloadCaches(array $slugs, array $abilityKeys): void
+    {
+        $this->cardGroupBuilder->preloadCaches($slugs, $abilityKeys);
+    }
+
     public function build(Card $card, array $data, string $locale): Card
     {
         if ($card->getId()) {
@@ -58,6 +69,16 @@ class CardBuilder
 
         if (array_key_exists('qrUrlDetail', $data)) {
             $card->setQrUrlDetail($data['qrUrlDetail']);
+        }
+
+        if (array_key_exists('isExclusive', $data)) {
+            $card->setIsExclusive((bool) $data['isExclusive']);
+        }
+        if (array_key_exists('lowerPrice', $data) && $data['lowerPrice'] !== null) {
+            $card->setLowerPrice((float) $data['lowerPrice']);
+        }
+        if (isset($data['cardProduct']['reference'])) {
+            $card->setCardProduct($data['cardProduct']['reference']);
         }
 
         if (!$card->getSet()) {
