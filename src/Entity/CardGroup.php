@@ -59,6 +59,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\CardGroupSetFilter::class)]
 #[ApiFilter(\App\Filter\CardGroupCardReferenceFilter::class)]
 #[ApiFilter(ReferenceFilter::class, properties: ['cardType', 'subTypes', 'rarity', 'faction' => 'code'])]
+#[ApiFilter(\App\Filter\ExcludeReferenceFilter::class, properties: ['cardType', 'subTypes'])]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType'])]
 #[ApiFilter(\App\Filter\EffectKeywordFilter::class, properties: ['effectKeyword'])]
 #[ApiFilter(\App\Filter\HasNoEffectFilter::class, properties: ['hasNoEffect'])]

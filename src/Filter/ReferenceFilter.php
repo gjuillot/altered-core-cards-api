@@ -34,6 +34,11 @@ final class ReferenceFilter extends AbstractFilter
             return;
         }
 
+        // Skip operator-style arrays like ['ne' => [...]] — handled by ExcludeReferenceFilter.
+        if (is_array($value) && !array_is_list($value)) {
+            return;
+        }
+
         $alias = $queryBuilder->getRootAliases()[0];
 
         $em          = $this->getManagerRegistry()->getManagerForClass($resourceClass);
