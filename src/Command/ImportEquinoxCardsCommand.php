@@ -223,7 +223,7 @@ class ImportEquinoxCardsCommand extends Command
     {
         $alteredIds    = array_keys($batch);
         $alteredIdMap  = $this->cardRepository->findAlteredIdMap($alteredIds);
-        $existingCards = $this->cardRepository->findByAlteredIds(array_keys($alteredIdMap));
+        $existingCards = $this->cardRepository->findByAlteredIds($alteredIdMap);
 
         // Pre-warm builder caches — 2 bulk SELECTs instead of N+1 per card
         $slugs = [];

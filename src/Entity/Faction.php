@@ -12,6 +12,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: FactionRepository::class)]
+#[ORM\Index(name: 'idx_faction_code', fields: ['code'])]
 #[ApiResource(
     operations: [
         new Get(),
