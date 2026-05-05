@@ -122,6 +122,9 @@ class CardBuilder
         if (array_key_exists('isExclusive', $data)) {
             $card->setIsExclusive((bool) $data['isExclusive']);
         }
+        if (array_key_exists('isPublic', $data)) {
+            $card->setIsPublic((bool) $data['isPublic']);
+        }
         if (array_key_exists('lowerPrice', $data) && $data['lowerPrice'] !== null) {
             $card->setLowerPrice((float) $data['lowerPrice']);
         }

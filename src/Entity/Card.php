@@ -158,6 +158,10 @@ class Card implements TimestampInterface
     #[Groups(['card:read'])]
     private bool $isExclusive = false;
 
+    #[ORM\Column(type: "boolean", nullable: false)]
+    #[Groups(['card:list', 'card:read'])]
+    private bool $isPublic = false;
+
     #[ORM\Column(type: "float", nullable: true)]
     #[Groups(['card:read'])]
     private ?float $lowerPrice = null;
@@ -282,6 +286,9 @@ class Card implements TimestampInterface
 
     public function isExclusive(): bool { return $this->isExclusive; }
     public function setIsExclusive(bool $v): self { $this->isExclusive = $v; return $this; }
+
+    public function isPublic(): bool { return $this->isPublic; }
+    public function setIsPublic(bool $v): self { $this->isPublic = $v; return $this; }
 
     public function getLowerPrice(): ?float { return $this->lowerPrice; }
     public function setLowerPrice(?float $v): self { $this->lowerPrice = $v; return $this; }

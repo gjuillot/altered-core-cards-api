@@ -141,6 +141,7 @@ class ImportCardsCommand extends Command
                 $card  = $existingCards[$alteredId] ?? new Card();
 
                 // en-us first so effects are created before other locales set their texts
+                $data['isPublic'] = true;
                 $card = $this->cardBuilder->build($card, $data, 'en-us');
 
                 foreach ($data['translations'] ?? [] as $locale => $translationData) {

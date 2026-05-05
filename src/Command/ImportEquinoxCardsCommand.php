@@ -364,6 +364,7 @@ class ImportEquinoxCardsCommand extends Command
             'isSerialized'       => $data['isSerialized'] ?? false,
             'isParentSerialized' => $data['isParentSerialized'] ?? false,
             'isOwnerless'        => $data['isOwnerless'] ?? false,
+            'isPublic'           => $data['isPublic'] ?? false,
         ];
 
         // fr-fr payload extras: fills CardBuilder's locale === 'fr-fr' block
