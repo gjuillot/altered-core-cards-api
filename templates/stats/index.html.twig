@@ -30,7 +30,7 @@
     {# ── Global rarity counters ── #}
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
         {% for rarityRef, rarity in globalRarities %}
-        <a href="/api/card_groups?rarity.reference[]={{ rarityRef }}" target="_blank"
+        <a href="/api/cards?rarity={{ rarityRef }}" target="_blank"
            class="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-gray-600 rounded-xl px-5 py-4 transition-colors">
             <div class="flex items-center justify-between">
                 <span class="text-xs font-semibold uppercase tracking-wider
@@ -45,7 +45,7 @@
                 </svg>
             </div>
             <p class="text-2xl font-bold text-white">{{ rarity.nb|number_format(0, ',', ' ') }}</p>
-            <p class="text-xs text-gray-500">card groups total</p>
+            <p class="text-xs text-gray-500">cards total</p>
         </a>
         {% endfor %}
     </div>
@@ -78,7 +78,7 @@
                     <span class="ml-2 text-xs font-mono text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">{{ set.ref }}</span>
                 </div>
             </div>
-            <span class="text-sm font-bold text-gray-300">{{ set.total|number_format(0, ',', ' ') }} <span class="font-normal text-gray-500 text-xs">card groups</span></span>
+            <span class="text-sm font-bold text-gray-300">{{ set.total|number_format(0, ',', ' ') }} <span class="font-normal text-gray-500 text-xs">cards</span></span>
         </summary>
 
         <div class="border-t border-gray-800 divide-y divide-gray-800">
@@ -96,7 +96,7 @@
                 {# Rarity breakdown #}
                 <div class="flex flex-wrap gap-2 ml-10">
                     {% for rarity in faction.rarities %}
-                    {% set apiUrl = '/api/card_groups?faction.code=' ~ factionCode ~ '&rarity.reference[]=' ~ rarity.ref ~ '&cards.set.reference=' ~ setRef %}
+                    {% set apiUrl = '/api/cards?faction.code=' ~ factionCode ~ '&rarity=' ~ rarity.ref ~ '&set.reference=' ~ setRef %}
                     <a href="{{ apiUrl }}" target="_blank"
                        class="group/badge flex items-center gap-1.5 px-3 py-1.5 rounded-lg {{ rarityColors[rarity.ref] ?? 'bg-gray-800 text-gray-300' }} hover:ring-1 hover:ring-white/20 transition-all">
                         <span class="text-xs font-medium">{{ rarity.name }}</span>
@@ -122,7 +122,7 @@
             <div class="px-5 py-3 bg-gray-800/40 flex flex-wrap items-center gap-3">
                 <span class="text-xs text-gray-500 uppercase tracking-wider font-medium">Set total</span>
                 {% for rarityRef, rarity in raritySums %}
-                {% set apiUrl = '/api/card_groups?rarity.reference[]=' ~ rarityRef ~ '&cards.set.reference=' ~ setRef %}
+                {% set apiUrl = '/api/cards?rarity=' ~ rarityRef ~ '&set.reference=' ~ setRef %}
                 <a href="{{ apiUrl }}" target="_blank"
                    class="group/badge flex items-center gap-1.5 px-2.5 py-1 rounded {{ rarityColors[rarityRef] ?? 'bg-gray-700 text-gray-300' }} hover:ring-1 hover:ring-white/20 transition-all">
                     <span class="text-xs font-medium">{{ rarity.name }}</span>

@@ -39,12 +39,11 @@ class CheckUniqueCardGroupsCommand extends Command
         $dist = $this->connection->fetchAllAssociative(
             "SELECT nb_cards, COUNT(*) AS nb_groups
              FROM (
-                 SELECT cg.id, COUNT(c.id) AS nb_cards
-                 FROM card_group cg
-                 JOIN card c    ON c.card_group_id = cg.id
-                 JOIN rarity r  ON r.id = cg.rarity_id
-                 WHERE r.reference = 'UNIQUE'
-                 GROUP BY cg.id
+                 SELECT c.card_group_id, COUNT(cs.card_id) AS nb_cards
+                 FROM card_search cs
+                 JOIN card c ON c.id = cs.card_id
+                 WHERE c.is_serialized = true
+                 GROUP BY c.card_group_id
              ) sub
              GROUP BY nb_cards
              ORDER BY nb_cards"
@@ -58,34 +57,30 @@ class CheckUniqueCardGroupsCommand extends Command
         // ── 2. By set pair: which sets share the same UNIQUE card_group? ─────
         $io->section('Set pairs sharing UNIQUE card_groups');
 
-        $pairs = $this->connection->fetchAllAssociative(
-            "SELECT
-                 (SELECT STRING_AGG(s.reference, ',' ORDER BY s.reference)
-                  FROM card_set s
-                  WHERE s.id IN (SELECT DISTINCT c2.set_id FROM card c2 WHERE c2.card_group_id = cg.id)
-                 ) AS sets,
-                 COUNT(DISTINCT c.id) AS nb_cards
-             FROM card_group cg
-             JOIN card c    ON c.card_group_id = cg.id
-             JOIN rarity r  ON r.id = cg.rarity_id
-             WHERE r.reference = 'UNIQUE'
-             GROUP BY cg.id
-             HAVING COUNT(DISTINCT c.id) >= :min",
+        $pairRows = $this->connection->fetchAllAssociative(
+            "SELECT sets, COUNT(*) AS nb_groups, SUM(nb_cards) AS nb_cards
+             FROM (
+                 SELECT
+                     c.card_group_id,
+                     COUNT(DISTINCT cs.card_id)              AS nb_cards,
+                     STRING_AGG(DISTINCT s.reference, ',')   AS sets
+                 FROM card_search cs
+                 JOIN card c     ON c.id    = cs.card_id
+                 JOIN card_set s ON s.id    = c.set_id
+                 WHERE c.is_serialized = true
+                 GROUP BY c.card_group_id
+                 HAVING COUNT(DISTINCT cs.card_id) >= :min
+             ) sub
+             GROUP BY sets
+             ORDER BY nb_groups DESC",
             ['min' => $minCards],
         );
 
-        // Re-aggregate by set combination in PHP
-        $bySets = [];
-        foreach ($pairs as $row) {
-            $key = $row['sets'];
-            if (!isset($bySets[$key])) {
-                $bySets[$key] = ['sets' => $key, 'nb_groups' => 0, 'nb_cards' => 0];
-            }
-            $bySets[$key]['nb_groups']++;
-            $bySets[$key]['nb_cards'] += (int) $row['nb_cards'];
-        }
-
-        usort($bySets, fn($a, $b) => $b['nb_groups'] <=> $a['nb_groups']);
+        $bySets = array_map(fn($r) => [
+            'sets'      => $r['sets'],
+            'nb_groups' => (int) $r['nb_groups'],
+            'nb_cards'  => (int) $r['nb_cards'],
+        ], $pairRows);
 
         if (empty($bySets)) {
             $io->success('No UNIQUE card_groups with multiple cards found.');
@@ -108,17 +103,15 @@ class CheckUniqueCardGroupsCommand extends Command
             "SELECT
                  cg.slug,
                  STRING_AGG(c.reference, ', ' ORDER BY c.reference) AS card_refs,
-                 (SELECT STRING_AGG(s.reference, ',' ORDER BY s.reference)
-                  FROM card_set s
-                  WHERE s.id IN (SELECT DISTINCT c2.set_id FROM card c2 WHERE c2.card_group_id = cg.id)
-                 ) AS sets
-             FROM card_group cg
-             JOIN card c   ON c.card_group_id = cg.id
-             JOIN rarity r ON r.id = cg.rarity_id
-             WHERE r.reference = 'UNIQUE'
+                 STRING_AGG(DISTINCT s.reference, ',')              AS sets
+             FROM card_search cs
+             JOIN card c      ON c.id   = cs.card_id
+             JOIN card_set s  ON s.id   = c.set_id
+             JOIN card_group cg ON cg.id = c.card_group_id
+             WHERE c.is_serialized = true
              GROUP BY cg.id, cg.slug
-             HAVING COUNT(DISTINCT c.id) >= :min
-             ORDER BY COUNT(DISTINCT c.id) DESC
+             HAVING COUNT(DISTINCT cs.card_id) >= :min
+             ORDER BY COUNT(DISTINCT cs.card_id) DESC
              LIMIT 20",
             ['min' => $minCards],
         );
