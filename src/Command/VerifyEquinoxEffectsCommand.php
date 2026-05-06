@@ -119,9 +119,12 @@ class VerifyEquinoxEffectsCommand extends Command
             $effectKeys = $this->extractEffectKeys($data['cardElements'] ?? []);
             $jsonKeys   = $effectKeys['MAIN_EFFECT'] ?? [];
 
+            $jsonTexts = $this->extractEffectTexts($data['cardElements'] ?? []);
+
             $batch[$alteredId] = [
                 'reference' => $reference,
                 'jsonKeys'  => $jsonKeys,
+                'jsonTexts' => $jsonTexts['MAIN_EFFECT'] ?? [],
             ];
 
             if (count($batch) >= self::BATCH_SIZE) {
@@ -134,23 +137,35 @@ class VerifyEquinoxEffectsCommand extends Command
             $this->verifyBatch($batch, $ok, $missing, $mismatches, $showOk, $io);
         }
 
+        $realMismatches = array_filter($mismatches, fn($r) => ($r[6] ?? '') !== 'alias');
+        $aliases        = array_filter($mismatches, fn($r) => ($r[6] ?? '') === 'alias');
+
         $io->newLine();
         $io->definitionList(
-            ['OK'       => $ok],
-            ['Missing'  => $missing],
-            ['Mismatch' => count($mismatches)],
+            ['OK'      => $ok],
+            ['Alias'   => count($aliases)],
+            ['Missing' => $missing],
+            ['Mismatch'=> count($realMismatches)],
         );
 
-        if (!empty($mismatches)) {
-            $io->section('Mismatches');
+        if (!empty($aliases) && $showOk) {
+            $io->section('Aliases (same text, different Equinox ID — harmless)');
             $io->table(
                 ['Reference', 'Slot', 'JSON key', 'DB key'],
-                $mismatches,
+                array_map(fn($r) => [$r[0], $r[1], $r[2], $r[3]], $aliases),
+            );
+        }
+
+        if (!empty($realMismatches)) {
+            $io->section('Real mismatches');
+            $io->table(
+                ['Reference', 'Slot', 'JSON key', 'DB key', 'JSON text (60)', 'DB text (60)'],
+                array_map(fn($r) => array_slice($r, 0, 6), $realMismatches),
             );
             return Command::FAILURE;
         }
 
-        $io->success('All cards match.');
+        $io->success('All cards match (aliases ignored).');
         return Command::SUCCESS;
     }
 
@@ -168,9 +183,9 @@ class VerifyEquinoxEffectsCommand extends Command
         $rows = $this->connection->fetchAllAssociative(
             "SELECT c.altered_id,
                     c.reference,
-                    me1.ability_key AS ek1,
-                    me2.ability_key AS ek2,
-                    me3.ability_key AS ek3
+                    me1.ability_key AS ek1, me1.text_en AS text1,
+                    me2.ability_key AS ek2, me2.text_en AS text2,
+                    me3.ability_key AS ek3, me3.text_en AS text3
              FROM card c
              LEFT JOIN card_group cg ON cg.id = c.card_group_id
              LEFT JOIN main_effect me1 ON me1.id = cg.effect1_id
@@ -183,9 +198,8 @@ class VerifyEquinoxEffectsCommand extends Command
         $dbMap = [];
         foreach ($rows as $row) {
             $dbMap[$row['altered_id']] = [
-                $row['ek1'],
-                $row['ek2'],
-                $row['ek3'],
+                'keys'  => [$row['ek1'], $row['ek2'], $row['ek3']],
+                'texts' => [$row['text1'], $row['text2'], $row['text3']],
             ];
         }
 
@@ -195,26 +209,38 @@ class VerifyEquinoxEffectsCommand extends Command
 
             if (!isset($dbMap[$alteredId])) {
                 $missing++;
-                $mismatches[] = [$reference, '—', '—', '<not in DB>'];
+                $mismatches[] = [$reference, '—', '—', '<not in DB>', '', ''];
                 continue;
             }
 
-            $dbKeys      = $dbMap[$alteredId];
+            $dbKeys      = $dbMap[$alteredId]['keys'];
+            $dbTexts     = $dbMap[$alteredId]['texts'];
+            $jsonTexts   = $entry['jsonTexts'];
             $cardMissed  = false;
 
             for ($i = 0; $i < 3; $i++) {
-                $jsonKey = $jsonKeys[$i] ?? null;
-                $dbKey   = $dbKeys[$i] ?? null;
+                $jsonKey  = $jsonKeys[$i] ?? null;
+                $dbKey    = $dbKeys[$i] ?? null;
 
                 if ($jsonKey === $dbKey) {
                     continue;
                 }
+
+                $jsonText = isset($jsonTexts[$i]) ? mb_substr($jsonTexts[$i], 0, 60) : '';
+                $dbText   = isset($dbTexts[$i])   ? mb_substr($dbTexts[$i],   0, 60) : '';
+
+                // Alias: keys differ but DB text matches — same effect, different Equinox ID
+                $isAlias = $dbTexts[$i] !== null
+                    && $this->buildExpectedText($jsonKey) === $dbTexts[$i];
 
                 $mismatches[] = [
                     $reference,
                     sprintf('effect%d', $i + 1),
                     $jsonKey ?? '(none)',
                     $dbKey   ?? '(none)',
+                    $jsonText,
+                    $dbText,
+                    $isAlias ? 'alias' : 'mismatch',
                 ];
                 $cardMissed = true;
             }
@@ -244,6 +270,64 @@ class VerifyEquinoxEffectsCommand extends Command
             $result[$type] = array_values(array_filter(
                 array_map(static fn($d) => $d['cardEffect']['reference'] ?? null, $displays)
             ));
+        }
+
+        return $result;
+    }
+
+    private function buildExpectedText(?string $abilityKey): ?string
+    {
+        if ($abilityKey === null) return null;
+
+        $parts = explode('_', $abilityKey);
+        if (count($parts) !== 3) return null;
+
+        [$tIdGd, $cIdGd, $eIdGd] = [(int) $parts[0], (int) $parts[1], (int) $parts[2]];
+
+        $rows = $this->connection->fetchAllAssociative(
+            "SELECT 'T' AS t, altered_id, text_en FROM ability_trigger WHERE altered_id = ?
+             UNION ALL
+             SELECT 'C', altered_id, text_en FROM ability_condition WHERE altered_id = ?
+             UNION ALL
+             SELECT 'E', altered_id, text_en FROM ability_effect WHERE altered_id = ?",
+            [$tIdGd, $cIdGd, $eIdGd],
+        );
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['t']] = $row['text_en'];
+        }
+
+        $textParts = array_filter([$map['T'] ?? null, $map['C'] ?? null, $map['E'] ?? null]);
+        return $textParts ? implode(' ', $textParts) : null;
+    }
+
+    private function extractEffectTexts(array $cardElements): array
+    {
+        $result = [];
+
+        foreach ($cardElements as $cardElement) {
+            $type = $cardElement['cardElementType']['reference'] ?? null;
+            if (!in_array($type, ['MAIN_EFFECT', 'ECHO_EFFECT'], true)) {
+                continue;
+            }
+
+            $displays = $cardElement['cardEffectDisplays'] ?? [];
+            usort($displays, static fn($a, $b) => ($a['sequence'] ?? 0) <=> ($b['sequence'] ?? 0));
+
+            $texts = [];
+            foreach ($displays as $display) {
+                $ref = $display['cardEffect']['reference'] ?? null;
+                if ($ref === null) continue;
+                // Prefer displayText, fallback to cardEffect text fields
+                $text = $display['displayTexts']['en_US']
+                    ?? $display['cardEffect']['textEn']
+                    ?? $display['cardEffect']['text']
+                    ?? '';
+                $texts[] = $text;
+            }
+
+            $result[$type] = $texts;
         }
 
         return $result;

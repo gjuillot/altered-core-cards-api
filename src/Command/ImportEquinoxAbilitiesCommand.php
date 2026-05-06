@@ -221,14 +221,26 @@ class ImportEquinoxAbilitiesCommand extends Command
             $io->writeln(sprintf('  %s: <info>%d</info> upserted', $table, $count));
         }
 
-        // ── 3. Load alteredId → internal id maps ──────────────────────────────
+        // ── 3. Load alteredId → internal id maps + texts ─────────────────────
 
         $io->section('Loading ability ID maps…');
 
-        $idMaps = [];
+        $idMaps    = [];
+        $textCache = []; // type → altered_id → {fr,en,de,es,it}
         foreach ($tableMap as $type => $table) {
-            $rows = $this->connection->fetchAllAssociative("SELECT id, altered_id FROM {$table}");
-            $idMaps[$type] = array_column($rows, 'id', 'altered_id');
+            $rows = $this->connection->fetchAllAssociative(
+                "SELECT id, altered_id, text_fr, text_en, text_de, text_es, text_it FROM {$table}"
+            );
+            foreach ($rows as $row) {
+                $idMaps[$type][$row['altered_id']] = $row['id'];
+                $textCache[$type][$row['altered_id']] = [
+                    'fr' => $row['text_fr'],
+                    'en' => $row['text_en'],
+                    'de' => $row['text_de'],
+                    'es' => $row['text_es'],
+                    'it' => $row['text_it'],
+                ];
+            }
         }
 
         // ── 4. Upsert main_effect ─────────────────────────────────────────────
@@ -249,6 +261,22 @@ class ImportEquinoxAbilitiesCommand extends Command
             $tId = $data['trigger_idgd'] > 0   ? ($idMaps['trigger'][$data['trigger_idgd']]     ?? null) : null;
             $cId = $data['condition_idgd'] > 0 ? ($idMaps['condition'][$data['condition_idgd']] ?? null) : null;
             $eId = $data['effect_idgd'] > 0    ? ($idMaps['effect'][$data['effect_idgd']]       ?? null) : null;
+
+            // When the JSON carries no element texts (e.g. serialized UNIQUE cards),
+            // fall back to concatenating texts from the ability component tables.
+            $hasText = ($data['en'] ?? '') !== '' || ($data['fr'] ?? '') !== '';
+            if (!$hasText) {
+                foreach (['fr', 'en', 'de', 'es', 'it'] as $col) {
+                    $parts = array_filter([
+                        $textCache['trigger'][$data['trigger_idgd']][$col]     ?? null,
+                        $textCache['condition'][$data['condition_idgd']][$col] ?? null,
+                        $textCache['effect'][$data['effect_idgd']][$col]       ?? null,
+                    ]);
+                    if ($parts) {
+                        $data[$col] = implode(' ', $parts);
+                    }
+                }
+            }
 
             if (isset($existingMap[$abilityKey])) {
                 if ($tId !== null || $cId !== null || $eId !== null) {

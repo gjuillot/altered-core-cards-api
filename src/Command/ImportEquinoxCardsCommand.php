@@ -63,6 +63,7 @@ class ImportEquinoxCardsCommand extends Command
             ->addOption('set', 's', InputOption::VALUE_OPTIONAL, 'Import only a specific set directory (e.g. BISE, CORE, ALIZE)')
             ->addOption('faction', 'f', InputOption::VALUE_OPTIONAL, 'Import only a specific faction directory (e.g. AX, BR, LY, MU, OR, YZ, NE)')
             ->addOption('rarity', 'r', InputOption::VALUE_OPTIONAL, 'Comma-separated rarities to import (COMMON, RARE, EXALTED, UNIQUE)')
+            ->addOption('non-unique', null, InputOption::VALUE_NONE, 'Shortcut for --rarity=COMMON,RARE,EXALTED')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Parse files and show what would be imported without writing to the database');
     }
 
@@ -77,8 +78,9 @@ class ImportEquinoxCardsCommand extends Command
         $dryRun        = (bool) $input->getOption('dry-run');
 
         $rarityAbbrevs = null;
-        if ($input->getOption('rarity')) {
-            $rarityKeys    = array_map('strtoupper', array_map('trim', explode(',', $input->getOption('rarity'))));
+        $rarityOption  = $input->getOption('non-unique') ? 'COMMON,RARE,EXALTED' : $input->getOption('rarity');
+        if ($rarityOption) {
+            $rarityKeys    = array_map('strtoupper', array_map('trim', explode(',', $rarityOption)));
             $rarityAbbrevs = [];
             foreach ($rarityKeys as $key) {
                 $rarityAbbrevs = array_merge($rarityAbbrevs, self::RARITY_ABBREV[$key] ?? []);
@@ -91,7 +93,7 @@ class ImportEquinoxCardsCommand extends Command
             ['Directory'      => $directory],
             ['Set filter'     => $setFilter ?? '(all)'],
             ['Faction filter' => $factionFilter ?? '(all)'],
-            ['Rarity filter'  => $rarityAbbrevs ? implode(', ', $rarityAbbrevs) : '(all)'],
+            ['Rarity filter'  => $rarityAbbrevs ? implode(', ', $rarityAbbrevs) : '(all)' . ($input->getOption('non-unique') ? ' [--non-unique]' : '')],
             ['Dry run'        => $dryRun ? 'YES — no database writes' : 'no'],
         );
 
@@ -384,6 +386,11 @@ class ImportEquinoxCardsCommand extends Command
             $enUsData['elements']['MAIN_EFFECT_KEYS'] = $effectKeys['MAIN_EFFECT'];
         }
 
+        // Equinox loreEntries carry all locale texts inline under `translations`.
+        // Normalize to per-locale format that CardGroupBuilder.buildLoreEntries() expects.
+        $lorePerLocale = $this->normalizeLoreEntriesForLocales($data['loreEntries'] ?? []);
+        $enUsData['loreEntries'] = $lorePerLocale['en-us'] ?? [];
+
         $payloads = ['en-us' => $enUsData];
 
         foreach ($data['translations'] ?? [] as $localeKey => $trans) {
@@ -396,8 +403,9 @@ class ImportEquinoxCardsCommand extends Command
             $localeImage = $trans['image'] ?? ($allImagePath[$locale] ?? null);
 
             $payload = array_merge($basePayload, [
-                'name'      => $trans['name'] ?? null,
-                'imagePath' => $localeImage,
+                'name'        => $trans['name'] ?? null,
+                'imagePath'   => $localeImage,
+                'loreEntries' => $lorePerLocale[$locale] ?? [],
             ]);
 
             if ($locale === 'fr-fr') {
@@ -411,12 +419,42 @@ class ImportEquinoxCardsCommand extends Command
         if (!isset($payloads['fr-fr'])) {
             $payloads['fr-fr'] = array_merge(
                 $basePayload,
-                ['name' => $data['name'] ?? null],
+                ['name' => $data['name'] ?? null, 'loreEntries' => $lorePerLocale['fr-fr'] ?? []],
                 $frFrExtras,
             );
         }
 
         return $payloads;
+    }
+
+    /**
+     * Converts Equinox loreEntries (translations inline) to the per-locale format that
+     * CardGroupBuilder::buildLoreEntries() expects (loreEntryType + loreEntryElements[]).
+     *
+     * @return array<string, list<array>> locale (en-us, fr-fr, …) → normalized entries
+     */
+    private function normalizeLoreEntriesForLocales(array $loreEntries): array
+    {
+        $result = [];
+
+        foreach ($loreEntries as $entry) {
+            foreach (self::LOCALE_MAP as $apiLocale => $dashLocale) {
+                $text = $entry['translations'][$apiLocale]['text'] ?? null;
+
+                $result[$dashLocale][] = [
+                    'id'                => $entry['id'] ?? null,
+                    'loreEntryType'     => $entry['loreEntryElementType'] ?? null,
+                    'loreEntryElements' => $text !== null ? [
+                        [
+                            'loreEntryElementType' => $entry['loreEntryElementType'] ?? null,
+                            'text'                 => $text,
+                        ],
+                    ] : [],
+                ];
+            }
+        }
+
+        return $result;
     }
 
     /**
