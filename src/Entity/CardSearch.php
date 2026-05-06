@@ -54,6 +54,9 @@ class CardSearch
     #[ORM\Column(name: 'has_effect', options: ['default' => false])]
     private bool $hasEffect = false;
 
+    #[ORM\Column(name: 'is_public', options: ['default' => false])]
+    private bool $isPublic = false;
+
     /** PostgreSQL TEXT[] — managed via DBAL, not ORM. */
     #[ORM\Column(columnDefinition: "TEXT[] NOT NULL DEFAULT '{}'")]
     private array $keywords = [];
@@ -69,5 +72,6 @@ class CardSearch
     public function getC3(): ?int { return $this->c3; }
     public function getE3(): ?int { return $this->e3; }
     public function isHasEffect(): bool { return $this->hasEffect; }
+    public function isPublic(): bool { return $this->isPublic; }
     public function getKeywords(): array { return $this->keywords; }
 }

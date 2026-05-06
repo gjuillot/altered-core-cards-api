@@ -26,9 +26,14 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ORM\Index(name: "idx_card_altered_id", fields: ["alteredId"])]
 #[ORM\Index(name: "idx_card_set", fields: ["set"])]
 #[ORM\Index(name: "idx_card_rarity", fields: ["rarity"])]
+#[ORM\Index(name: "idx_card_rarity_id", fields: ["rarity", "id"])]
 #[ORM\Index(name: "idx_card_card_group", fields: ["cardGroup"])]
 #[ORM\Index(name: "idx_card_card_number", fields: ["cardNumber"])]
+#[ORM\Index(name: "idx_card_set_card_number", fields: ["set", "cardNumber"])]
+#[ORM\Index(name: "idx_card_set_card_group", fields: ["set", "cardGroup"])]
+#[ORM\Index(name: "idx_card_card_group_set", fields: ["cardGroup", "set"])]
 #[ORM\Index(name: "idx_card_is_serialized", fields: ["isSerialized"])]
+#[ORM\Index(name: "idx_card_collector_number", fields: ["collectorNumberFormatedId"])]
 #[ORM\Entity(repositoryClass: CardRepository::class)]
 #[Gedmo\TranslationEntity(class: CardTranslation::class)]
 #[ApiResource(
@@ -50,18 +55,20 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
             paginationFetchJoinCollection: false,
             paginationClientItemsPerPage: true,
             paginationMaximumItemsPerPage: 1000,
+            forceEager: false,
         ),
     ],
     normalizationContext: ['groups' => ['card:read']],
     paginationItemsPerPage: 30,
 )]
 #[ApiFilter(SearchFilter::class, properties: [
-    'reference'    => 'exact',
-    'set.reference'=> 'exact',
-    'kickstarter'  => 'exact',
-    'promo'        => 'exact',
-    'isSerialized' => 'exact',
-    'variation'    => 'exact',
+    'reference'                  => 'exact',
+    'set.reference'              => 'exact',
+    'kickstarter'                => 'exact',
+    'promo'                      => 'exact',
+    'isSerialized'               => 'exact',
+    'variation'                  => 'exact',
+    'collectorNumberFormatedId'  => 'exact',
 ])]
 #[ApiFilter(ReferenceFilter::class, properties: ['rarity'])]
 #[ApiFilter(CardGroupAliasFilter::class, properties: [
@@ -70,7 +77,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     'mainCost', 'recallCost', 'oceanPower', 'mountainPower', 'forestPower',
 ])]
 #[ApiFilter(\App\Filter\CardNameFilter::class, properties: ['name'])]
-#[ApiFilter(OrderFilter::class, properties: ['cardNumber', 'set.date', 'random'])]
+#[ApiFilter(OrderFilter::class, properties: ['cardNumber', 'collectorNumberFormatedId', 'set.date', 'random'])]
 #[ApiFilter(\App\Filter\CardGroupOrderFilter::class, properties: ['mainCost', 'recallCost', 'oceanPower', 'mountainPower', 'forestPower'])]
 #[ApiFilter(\App\Filter\RandomCardFilter::class)]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType' => 'cardGroup'])]
@@ -80,6 +87,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\EffectSlotFilter::class, properties: ['effectSlot'])]
 #[ApiFilter(\App\Filter\ArtistFilter::class)]
 #[ApiFilter(\App\Filter\BgaQueryFilter::class, properties: ['bga' => 'exact'])]
+#[ApiFilter(\App\Filter\AfterIdFilter::class, properties: ['afterId'])]
 class Card implements TimestampInterface
 {
     use TimestampTrait;
@@ -102,7 +110,7 @@ class Card implements TimestampInterface
     private int $cardNumber = 0;
 
     #[ORM\Column(length: 50, nullable: true)]
-    #[Groups(['card:read'])]
+    #[Groups(['card:list', 'card:read'])]
     private ?string $collectorNumberFormatedId = null;
 
     #[ORM\Column(nullable: true)]
@@ -146,6 +154,22 @@ class Card implements TimestampInterface
     #[Groups(['card:read'])]
     private bool $isOwnerless = false;
 
+    #[ORM\Column(type: "boolean", nullable: false)]
+    #[Groups(['card:read'])]
+    private bool $isExclusive = false;
+
+    #[ORM\Column(type: "boolean", nullable: false)]
+    #[Groups(['card:list', 'card:read'])]
+    private bool $isPublic = false;
+
+    #[ORM\Column(type: "float", nullable: true)]
+    #[Groups(['card:read'])]
+    private ?float $lowerPrice = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['card:list', 'card:read'])]
+    private ?string $cardProduct = null;
+
     /**
      * Printing variant: standard | alt-art | promo | kickstarter | serialized
      */
@@ -169,7 +193,7 @@ class Card implements TimestampInterface
     #[ORM\ManyToOne(targetEntity: Card::class)]
     private ?Card $parentCard = null;
 
-    #[ORM\OneToMany(targetEntity: CardTranslation::class, mappedBy: 'card', cascade: ['persist'], fetch: 'EAGER')]
+    #[ORM\OneToMany(targetEntity: CardTranslation::class, mappedBy: 'card', cascade: ['persist'])]
     private Collection $translations;
 
     #[ORM\ManyToMany(targetEntity: Artist::class)]
@@ -259,6 +283,18 @@ class Card implements TimestampInterface
 
     public function isOwnerless(): bool { return $this->isOwnerless; }
     public function setIsOwnerless(bool $v): self { $this->isOwnerless = $v; return $this; }
+
+    public function isExclusive(): bool { return $this->isExclusive; }
+    public function setIsExclusive(bool $v): self { $this->isExclusive = $v; return $this; }
+
+    public function isPublic(): bool { return $this->isPublic; }
+    public function setIsPublic(bool $v): self { $this->isPublic = $v; return $this; }
+
+    public function getLowerPrice(): ?float { return $this->lowerPrice; }
+    public function setLowerPrice(?float $v): self { $this->lowerPrice = $v; return $this; }
+
+    public function getCardProduct(): ?string { return $this->cardProduct; }
+    public function setCardProduct(?string $v): self { $this->cardProduct = $v; return $this; }
 
     public function getVariation(): ?string { return $this->variation; }
     public function setVariation(?string $variation): self { $this->variation = $variation; return $this; }

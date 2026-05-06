@@ -46,19 +46,26 @@ class CardRepository extends ServiceEntityRepository
 
     /**
      * Returns a map of alteredId => Card for a specific set of alteredIds.
+     * Uses a lightweight query to avoid full hydration when cards are already in cache.
      *
-     * @param string[] $alteredIds
+     * @param array<string, int> $alteredIdMap  alteredId => id (from findAlteredIdMap)
      * @return array<string, Card>
      */
-    public function findByAlteredIds(array $alteredIds): array
+    public function findByAlteredIds(array $alteredIdMap): array
     {
-        if (empty($alteredIds)) {
+        if (empty($alteredIdMap)) {
             return [];
         }
 
+        $ids = array_values($alteredIdMap);
         $cards = $this->createQueryBuilder('c')
-            ->where('c.alteredId IN (:ids)')
-            ->setParameter('ids', $alteredIds)
+            ->addSelect('cg', 'ct', 'f', 'r')
+            ->leftJoin('c.cardGroup', 'cg')
+            ->leftJoin('cg.cardType', 'ct')
+            ->leftJoin('cg.faction', 'f')
+            ->leftJoin('c.rarity', 'r')
+            ->where('c.id IN (:ids)')
+            ->setParameter('ids', $ids)
             ->getQuery()
             ->getResult();
 

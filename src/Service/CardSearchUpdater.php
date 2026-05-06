@@ -29,6 +29,7 @@ final class CardSearchUpdater
             me3.ability_condition_id     AS c3,
             me3.ability_effect_id        AS e3,
             (me1.id IS NOT NULL OR me2.id IS NOT NULL OR me3.id IS NOT NULL) AS has_effect,
+            c.is_public                  AS is_public,
             COALESCE(
                 (SELECT array_agg(DISTINCT kw)
                  FROM (
@@ -55,6 +56,7 @@ final class CardSearchUpdater
             t2 = EXCLUDED.t2, c2 = EXCLUDED.c2, e2 = EXCLUDED.e2,
             t3 = EXCLUDED.t3, c3 = EXCLUDED.c3, e3 = EXCLUDED.e3,
             has_effect = EXCLUDED.has_effect,
+            is_public  = EXCLUDED.is_public,
             keywords   = EXCLUDED.keywords
     ";
 
@@ -63,7 +65,7 @@ final class CardSearchUpdater
     public function upsertCard(int $cardId): void
     {
         $this->connection->executeStatement(
-            'INSERT INTO card_search (card_id,t1,c1,e1,t2,c2,e2,t3,c3,e3,has_effect,keywords)'
+            'INSERT INTO card_search (card_id,t1,c1,e1,t2,c2,e2,t3,c3,e3,has_effect,is_public,keywords)'
             . self::SELECT_SQL
             . ' WHERE c.id = :cardId'
             . self::UPSERT_SUFFIX,
@@ -74,7 +76,7 @@ final class CardSearchUpdater
     public function upsertByCardGroupId(int $cardGroupId): void
     {
         $this->connection->executeStatement(
-            'INSERT INTO card_search (card_id,t1,c1,e1,t2,c2,e2,t3,c3,e3,has_effect,keywords)'
+            'INSERT INTO card_search (card_id,t1,c1,e1,t2,c2,e2,t3,c3,e3,has_effect,is_public,keywords)'
             . self::SELECT_SQL
             . ' WHERE cg.id = :cgId'
             . self::UPSERT_SUFFIX,
@@ -85,7 +87,7 @@ final class CardSearchUpdater
     public function upsertByMainEffectId(int $mainEffectId): void
     {
         $this->connection->executeStatement(
-            'INSERT INTO card_search (card_id,t1,c1,e1,t2,c2,e2,t3,c3,e3,has_effect,keywords)'
+            'INSERT INTO card_search (card_id,t1,c1,e1,t2,c2,e2,t3,c3,e3,has_effect,is_public,keywords)'
             . self::SELECT_SQL
             . ' WHERE cg.effect1_id = :meId OR cg.effect2_id = :meId OR cg.effect3_id = :meId'
             . self::UPSERT_SUFFIX,
@@ -107,7 +109,7 @@ final class CardSearchUpdater
         $this->connection->executeStatement('TRUNCATE card_search');
 
         return (int) $this->connection->executeStatement(
-            'INSERT INTO card_search (card_id,t1,c1,e1,t2,c2,e2,t3,c3,e3,has_effect,keywords)'
+            'INSERT INTO card_search (card_id,t1,c1,e1,t2,c2,e2,t3,c3,e3,has_effect,is_public,keywords)'
             . self::SELECT_SQL,
         );
     }

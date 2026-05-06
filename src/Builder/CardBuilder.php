@@ -32,6 +32,53 @@ class CardBuilder
         $this->cardGroupBuilder->reconcileNewEffects($em);
     }
 
+    public function computeSlug(array $data): string
+    {
+        return $this->cardGroupBuilder->computeSlug($data);
+    }
+
+    /** @param string[] $slugs  @param string[] $abilityKeys */
+    public function preloadCaches(array $slugs, array $abilityKeys): void
+    {
+        $this->cardGroupBuilder->preloadCaches($slugs, $abilityKeys);
+    }
+
+    /**
+     * Build a card with all its locales in one pass.
+     * CardGroup + gameplay stats are processed only once (en-us),
+     * then only translations and fr-fr specific fields are applied per locale.
+     *
+     * @param array<string, array> $localizedPayloads  locale → data array
+     */
+    public function buildAllLocales(Card $card, array $localizedPayloads): Card
+    {
+        $enData = $localizedPayloads['en-us'] ?? null;
+        if ($enData === null) {
+            return $card;
+        }
+
+        // ── Base build: CardGroup + gameplay stats (en-us only) ──────────────
+        $cardGroup = $this->cardGroupBuilder->findOrCreate($enData);
+        $cardGroup = $this->cardGroupBuilder->build($cardGroup, $enData, 'en-us');
+        $card->setCardGroup($cardGroup);
+
+        // ── Printing identity (set once, same for all locales) ────────────────
+        $this->applyPrintingIdentity($card, $enData);
+
+        // ── Per-locale: translation + fr-fr specifics ────────────────────────
+        foreach ($localizedPayloads as $locale => $payload) {
+            if ($locale === 'en-us') {
+                continue;
+            }
+            $this->applyLocaleData($card, $payload, $locale);
+        }
+
+        // en-us translation last (ensures name/image from en-us payload)
+        $this->applyLocaleData($card, $enData, 'en-us');
+
+        return $card;
+    }
+
     public function build(Card $card, array $data, string $locale): Card
     {
         if ($card->getId()) {
@@ -43,7 +90,19 @@ class CardBuilder
         $cardGroup = $this->cardGroupBuilder->build($cardGroup, $data, $locale);
         $card->setCardGroup($cardGroup);
 
-        // ── Printing identity ─────────────────────────────────────────────────
+        $this->applyPrintingIdentity($card, $data);
+
+        if ($locale === 'fr-fr') {
+            $this->applyFrFrFields($card, $data);
+        }
+
+        $card = $this->buildTranslation($card, $data, $locale);
+
+        return $card;
+    }
+
+    private function applyPrintingIdentity(Card $card, array $data): void
+    {
         $card->setAlteredId($data['id']);
         $card->setReference($data['reference']);
         $card->setKickstarter(array_key_exists('ks', $data) && $data['ks']);
@@ -60,6 +119,19 @@ class CardBuilder
             $card->setQrUrlDetail($data['qrUrlDetail']);
         }
 
+        if (array_key_exists('isExclusive', $data)) {
+            $card->setIsExclusive((bool) $data['isExclusive']);
+        }
+        if (array_key_exists('isPublic', $data)) {
+            $card->setIsPublic((bool) $data['isPublic']);
+        }
+        if (array_key_exists('lowerPrice', $data) && $data['lowerPrice'] !== null) {
+            $card->setLowerPrice((float) $data['lowerPrice']);
+        }
+        if (isset($data['cardProduct']['reference'])) {
+            $card->setCardProduct($data['cardProduct']['reference']);
+        }
+
         if (!$card->getSet()) {
             $dbSet = $this->setRepository->findOneByReference($data['cardSet']['reference'] ?? '');
             if ($dbSet) {
@@ -68,48 +140,53 @@ class CardBuilder
         }
 
         if (array_key_exists('rarity', $data) && isset($data['rarity']['reference'])) {
-            $card->setRarity($this->findOrCreateRarity($data['rarity'], $locale));
+            $card->setRarity($this->findOrCreateRarity($data['rarity'], 'en-us'));
+        }
+    }
+
+    private function applyFrFrFields(Card $card, array $data): void
+    {
+        if (array_key_exists('imagePath', $data)) {
+            $card->setImgPath($data['imagePath']);
+        }
+        if (array_key_exists('collectorNumberFormatted', $data)) {
+            $cnf = $data['collectorNumberFormatted'];
+            $card->setCollectorNumberFormatedId($cnf);
+
+            if (isset($cnf[4]) && $cnf[4] === 'P') {
+                $card->setPromo(true);
+                $card->setVariation('promo');
+            }
+            if (isset($cnf[8]) && $cnf[8] === 'F') {
+                $card->setTransfuge(true);
+            }
+
+            $card->setCardNumber((int) substr($cnf, 4, 3));
+        }
+        if (array_key_exists('allImagePath', $data)) {
+            $card->setAllImagePath($data['allImagePath']);
+        }
+        if (array_key_exists('assets', $data) && is_array($data['assets'])) {
+            $card->setAssets(array_values(array_merge(...array_values($data['assets']))));
         }
 
+        // Transfuge detection: faction in reference differs from mainFaction
+        if (isset($data['mainFaction']['reference'])) {
+            $refParts    = explode('_', $data['reference'] ?? '');
+            $refFaction  = strtoupper($refParts[3] ?? '');
+            $mainFaction = strtoupper($data['mainFaction']['reference']);
+            if ($refFaction !== '' && $refFaction !== $mainFaction) {
+                $card->setTransfuge(true);
+            }
+        }
+    }
+
+    private function applyLocaleData(Card $card, array $data, string $locale): void
+    {
         if ($locale === 'fr-fr') {
-            if (array_key_exists('imagePath', $data)) {
-                $card->setImgPath($data['imagePath']);
-            }
-            if (array_key_exists('collectorNumberFormatted', $data)) {
-                $cnf = $data['collectorNumberFormatted'];
-                $card->setCollectorNumberFormatedId($cnf);
-
-                if (isset($cnf[4]) && $cnf[4] === 'P') {
-                    $card->setPromo(true);
-                    $card->setVariation('promo');
-                }
-                if (isset($cnf[8]) && $cnf[8] === 'F') {
-                    $card->setTransfuge(true);
-                }
-
-                $card->setCardNumber((int) substr($cnf, 4, 3));
-            }
-            if (array_key_exists('allImagePath', $data)) {
-                $card->setAllImagePath($data['allImagePath']);
-            }
-            if (array_key_exists('assets', $data) && is_array($data['assets'])) {
-                $card->setAssets(array_values(array_merge(...array_values($data['assets']))));
-            }
-
-            // Transfuge detection: faction in reference differs from mainFaction
-            if (isset($data['mainFaction']['reference'])) {
-                $refParts    = explode('_', $data['reference'] ?? '');
-                $refFaction  = strtoupper($refParts[3] ?? '');
-                $mainFaction = strtoupper($data['mainFaction']['reference']);
-                if ($refFaction !== '' && $refFaction !== $mainFaction) {
-                    $card->setTransfuge(true);
-                }
-            }
+            $this->applyFrFrFields($card, $data);
         }
-
         $card = $this->buildTranslation($card, $data, $locale);
-
-        return $card;
     }
 
     private function buildTranslation(Card $card, array $data, string $locale): Card

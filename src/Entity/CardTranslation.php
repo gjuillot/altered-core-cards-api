@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Translatable\Entity\Repository\TranslationRepository;
 
 #[ORM\Entity(repositoryClass: TranslationRepository::class)]
+#[ORM\Index(name: "idx_card_translation_card_id", fields: ["card"])]
 class CardTranslation implements TimestampInterface
 {
     use TimestampTrait;

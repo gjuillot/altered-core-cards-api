@@ -24,6 +24,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ORM\Index(name: "idx_card_group_slug", fields: ["slug"])]
 #[ORM\Index(name: "idx_card_group_faction", fields: ["faction"])]
 #[ORM\Index(name: "idx_card_group_card_type", fields: ["cardType"])]
+#[ORM\Index(name: "idx_card_group_card_type_id", fields: ["cardType", "id"])]
 #[ORM\Index(name: "idx_card_group_main_cost", fields: ["mainCost"])]
 #[ORM\Index(name: "idx_card_group_recall_cost", fields: ["recallCost"])]
 #[ORM\Index(name: "idx_card_group_is_banned", fields: ["isBanned"])]
@@ -39,26 +40,26 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
             provider: \App\State\CardGroupCollectionProvider::class,
             normalizationContext: ['groups' => ['card_group:read']],
             paginationFetchJoinCollection: false,
+            forceEager: false,
         ),
     ],
     paginationItemsPerPage: 30,
 )]
 #[ApiFilter(SearchFilter::class, properties: [
-    'slug'                   => 'exact',
-    'faction.code'           => 'exact',
-    'mainCost'               => 'exact',
-    'recallCost'             => 'exact',
-    'oceanPower'             => 'exact',
-    'mountainPower'          => 'exact',
-    'forestPower'            => 'exact',
-    'isBanned'               => 'exact',
-    'isErrated'              => 'exact',
-    'isSuspended'            => 'exact',
-    'rarity.reference'    => 'exact',
-    'cards.set.reference' => 'exact',
-    'cards.reference'   => 'exact',
+    'slug'         => 'exact',
+    'mainCost'     => 'exact',
+    'recallCost'   => 'exact',
+    'oceanPower'   => 'exact',
+    'mountainPower'=> 'exact',
+    'forestPower'  => 'exact',
+    'isBanned'     => 'exact',
+    'isErrated'    => 'exact',
+    'isSuspended'  => 'exact',
 ])]
-#[ApiFilter(ReferenceFilter::class, properties: ['cardType', 'subTypes'])]
+#[ApiFilter(\App\Filter\CardGroupSetFilter::class)]
+#[ApiFilter(\App\Filter\CardGroupCardReferenceFilter::class)]
+#[ApiFilter(ReferenceFilter::class, properties: ['cardType', 'subTypes', 'rarity', 'faction' => 'code'])]
+#[ApiFilter(\App\Filter\ExcludeReferenceFilter::class, properties: ['cardType', 'subTypes'])]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType'])]
 #[ApiFilter(\App\Filter\EffectKeywordFilter::class, properties: ['effectKeyword'])]
 #[ApiFilter(\App\Filter\HasNoEffectFilter::class, properties: ['hasNoEffect'])]
@@ -66,6 +67,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\EffectSlotFilter::class, properties: ['effectSlot'])]
 #[ApiFilter(\App\Filter\CardNameFilter::class, properties: ['name'])]
 #[ApiFilter(OrderFilter::class, properties: ['mainCost', 'recallCost'])]
+#[ApiFilter(\App\Filter\AfterIdFilter::class, properties: ['afterId'])]
 class CardGroup implements TimestampInterface
 {
     use TimestampTrait;
@@ -86,14 +88,17 @@ class CardGroup implements TimestampInterface
 
     #[ORM\ManyToOne(targetEntity: Faction::class)]
     #[Groups(['card_group:read', 'card:list', 'card:read', 'card_group:read:detail'])]
+    #[ApiProperty(fetchEager: false)]
     private ?Faction $faction = null;
 
     #[ORM\ManyToOne(targetEntity: Rarity::class, cascade: ['persist'])]
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
     private ?Rarity $rarity = null;
 
     #[ORM\ManyToOne(targetEntity: CardType::class, cascade: ['persist'])]
     #[Groups(['card_group:read', 'card_group:read:detail', 'card:list', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
     private ?CardType $cardType = null;
 
     #[ORM\ManyToMany(targetEntity: CardSubType::class, cascade: ['persist'])]
@@ -165,7 +170,7 @@ class CardGroup implements TimestampInterface
     #[ORM\OneToMany(targetEntity: LoreEntry::class, mappedBy: 'cardGroup', cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $loreEntries;
 
-    #[ORM\OneToMany(targetEntity: CardGroupTranslation::class, mappedBy: 'cardGroup', cascade: ['persist'], fetch: 'EAGER')]
+    #[ORM\OneToMany(targetEntity: CardGroupTranslation::class, mappedBy: 'cardGroup', cascade: ['persist'])]
     private Collection $translations;
 
     #[ORM\OneToMany(targetEntity: Card::class, mappedBy: 'cardGroup')]

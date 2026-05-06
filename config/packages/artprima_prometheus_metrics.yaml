@@ -4,6 +4,11 @@ artprima_prometheus_metrics:
     storage:
         type: apcu
 
+when@dev:
+    artprima_prometheus_metrics:
+        storage:
+            type: in_memory
+
 when@test:
     artprima_prometheus_metrics:
         storage:

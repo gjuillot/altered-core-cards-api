@@ -17,8 +17,8 @@ final class CardBatchControllerTest extends TestCase
     protected function setUp(): void
     {
         $this->controller = new CardBatchController(
-            $this->createMock(CardRepository::class),
-            $this->createMock(SerializerInterface::class),
+            $this->createStub(CardRepository::class),
+            $this->createStub(SerializerInterface::class),
         );
     }
 

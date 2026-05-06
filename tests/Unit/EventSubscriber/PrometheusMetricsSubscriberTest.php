@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\EventSubscriber;
 
 use App\EventSubscriber\PrometheusMetricsSubscriber;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Prometheus\CollectorRegistry;
@@ -28,6 +29,7 @@ final class PrometheusMetricsSubscriberTest extends TestCase
         $this->subscriber = new PrometheusMetricsSubscriber($this->registry);
     }
 
+    #[AllowMockObjectsWithoutExpectations]
     public function testSubscribedEvents(): void
     {
         $events = PrometheusMetricsSubscriber::getSubscribedEvents();
@@ -44,7 +46,7 @@ final class PrometheusMetricsSubscriberTest extends TestCase
         $request = Request::create('/metrics/prometheus');
         $request->attributes->set('_route', 'prometheus_bundle_prometheus');
 
-        $kernel = $this->createMock(HttpKernelInterface::class);
+        $kernel = $this->createStub(HttpKernelInterface::class);
 
         $this->simulateRequest($request, $kernel);
     }
@@ -68,7 +70,7 @@ final class PrometheusMetricsSubscriberTest extends TestCase
         $request = Request::create('/api/cards');
         $request->attributes->set('_route', 'api_cards_collection');
 
-        $kernel = $this->createMock(HttpKernelInterface::class);
+        $kernel = $this->createStub(HttpKernelInterface::class);
 
         $this->simulateRequest($request, $kernel);
     }
@@ -81,13 +83,13 @@ final class PrometheusMetricsSubscriberTest extends TestCase
         $counter->expects($this->once())->method('inc');
         $histogram->expects($this->once())->method('observe');
 
-        $this->registry->method('getOrRegisterCounter')->willReturn($counter);
-        $this->registry->method('getOrRegisterHistogram')->willReturn($histogram);
+        $this->registry->expects($this->once())->method('getOrRegisterCounter')->willReturn($counter);
+        $this->registry->expects($this->once())->method('getOrRegisterHistogram')->willReturn($histogram);
 
         $request = Request::create('/.env.local');
         // No _route attribute set → resolves to 'unknown'
 
-        $kernel = $this->createMock(HttpKernelInterface::class);
+        $kernel = $this->createStub(HttpKernelInterface::class);
 
         $this->simulateRequest($request, $kernel);
     }

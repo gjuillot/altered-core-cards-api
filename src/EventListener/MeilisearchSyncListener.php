@@ -20,15 +20,20 @@ use Doctrine\ORM\Events;
 #[AsEntityListener(event: Events::postUpdate, entity: CardGroupTranslation::class)]
 final class MeilisearchSyncListener
 {
+    /** @var bool Disable indexing during bulk imports */
+    public static bool $disabled = false;
+
     public function __construct(private readonly SearchBackendInterface $search) {}
 
     public function postPersist(Card $card, PostPersistEventArgs $args): void
     {
+        if (self::$disabled) return;
         $this->search->indexCard($card);
     }
 
     public function postPersistTranslation(CardGroupTranslation $translation, PostPersistEventArgs $args): void
     {
+        if (self::$disabled) return;
         foreach ($translation->getCardGroup()->getCards() as $card) {
             $this->search->indexCard($card);
         }
@@ -36,6 +41,7 @@ final class MeilisearchSyncListener
 
     public function postUpdate(Card|CardGroup|CardGroupTranslation $entity, PostUpdateEventArgs $args): void
     {
+        if (self::$disabled) return;
         if ($entity instanceof Card) {
             $this->search->indexCard($entity);
             return;
@@ -49,6 +55,7 @@ final class MeilisearchSyncListener
 
     public function preRemove(Card $card, PreRemoveEventArgs $args): void
     {
+        if (self::$disabled) return;
         $this->search->deleteCard($card);
     }
 }

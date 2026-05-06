@@ -52,3 +52,8 @@ services:
             - '@App\Search\MeilisearchBackend'
             - '@App\Search\NullSearchBackend'
 
+when@test:
+    services:
+        App\EventListener\CardSearchListener:
+            tags: []
+

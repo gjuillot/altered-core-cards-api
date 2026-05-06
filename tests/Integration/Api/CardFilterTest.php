@@ -98,12 +98,12 @@ final class CardFilterTest extends WebTestCase
 
     public function testFilterByKickstarterTrueReturnsMatch(): void
     {
-        $this->assertTotalItems(1, ['kickstarter' => 'true']);
+        $this->assertTotalItems(1, ['kickstarter' => '1']);
     }
 
     public function testFilterByPromoTrueReturnsEmpty(): void
     {
-        $this->assertTotalItems(0, ['promo' => 'true']);
+        $this->assertTotalItems(0, ['promo' => '1']);
     }
 
     // --- mainCost range (CardGroupAliasFilter) ---

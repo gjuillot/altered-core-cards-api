@@ -15,10 +15,14 @@ use Doctrine\Persistence\Event\LifecycleEventArgs;
 #[AsDoctrineListener(event: Events::postRemove)]
 final class CardSearchListener
 {
+    /** @var bool Disable search index during bulk imports */
+    public static bool $disabled = false;
+
     public function __construct(private readonly CardSearchUpdater $updater) {}
 
     public function postPersist(LifecycleEventArgs $args): void
     {
+        if (self::$disabled) return;
         $entity = $args->getObject();
         if ($entity instanceof Card) {
             $this->updater->upsertCard($entity->getId());
@@ -27,6 +31,7 @@ final class CardSearchListener
 
     public function postUpdate(LifecycleEventArgs $args): void
     {
+        if (self::$disabled) return;
         $entity = $args->getObject();
 
         if ($entity instanceof Card) {
@@ -46,6 +51,7 @@ final class CardSearchListener
 
     public function postRemove(LifecycleEventArgs $args): void
     {
+        if (self::$disabled) return;
         $entity = $args->getObject();
         if ($entity instanceof Card) {
             $this->updater->deleteCard($entity->getId());

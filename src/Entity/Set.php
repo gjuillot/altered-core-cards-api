@@ -15,6 +15,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
 #[ORM\Entity(repositoryClass: SetRepository::class)]
 #[ORM\Table(name: 'card_set')]
 #[ORM\Index(name: 'idx_card_set_date', fields: ['date'])]
+#[ORM\Index(name: 'idx_card_set_reference', fields: ['reference'])]
 #[ApiResource(
     operations: [
         new Get(),

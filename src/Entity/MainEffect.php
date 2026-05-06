@@ -114,6 +114,17 @@ class MainEffect
         return $this->id;
     }
 
+    public function __toString(): string
+    {
+        return sprintf(
+            'MainEffect[id=%s ak=%s fr=%s en=%s]',
+            $this->id ?? 'null',
+            $this->abilityKey ?? 'null',
+            substr($this->textFr ?? 'null', 0, 40),
+            substr($this->textEn ?? 'null', 0, 40),
+        );
+    }
+
     public function getTextFr(): ?string
     {
         return $this->textFr;

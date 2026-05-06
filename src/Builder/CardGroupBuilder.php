@@ -44,6 +44,18 @@ class CardGroupBuilder
     /** @var array<string, MainEffect> new (un-persisted) effects created this batch */
     private array $newEffects = [];
 
+    /** @var array<string, \App\Entity\Faction> */
+    private array $factionCache = [];
+
+    /** @var array<int, true> spl_object_id of effects whose text was set this batch */
+    private array $dirtyEffects = [];
+
+    /** @var array<string, int> abilityKey → DB id, populated by preloadCaches via DBAL */
+    private array $effectIdCache = [];
+
+    /** @var array<int, array> effect DB id → parsed keywords, flushed via DBAL in reconcileNewEffects */
+    private array $pendingKeywords = [];
+
     public function __construct(
         private readonly FactionRepository           $factionRepository,
         private readonly CardTypeRepository          $cardTypeRepository,
@@ -54,6 +66,7 @@ class CardGroupBuilder
         private readonly LoreEntryRepository         $loreEntryRepository,
         private readonly RarityRepository            $rarityRepository,
         private readonly EffectParser                $effectParser,
+        private readonly EntityManagerInterface      $em,
     ) {}
 
     public function clearCache(): void
@@ -65,6 +78,43 @@ class CardGroupBuilder
         $this->historyStatusCache = [];
         $this->effectCache        = [];
         $this->newEffects         = [];
+        $this->factionCache       = [];
+        $this->dirtyEffects       = [];
+        $this->effectIdCache      = [];
+        $this->pendingKeywords    = [];
+    }
+
+    /**
+     * Pre-warm group + effect caches with a single bulk query each,
+     * eliminating per-card SELECT N+1 queries during batch processing.
+     *
+     * @param string[] $slugs       all CardGroup slugs expected in this batch
+     * @param string[] $abilityKeys all MainEffect.abilityKey values expected in this batch
+     */
+    public function preloadCaches(array $slugs, array $abilityKeys): void
+    {
+        foreach ($this->cardGroupRepository->findBySlugs($slugs) as $slug => $group) {
+            $this->groupCache[$slug] ??= $group;
+        }
+
+        if (empty($abilityKeys)) {
+            return;
+        }
+
+        // Load only id + ability_key — no entity hydration, no identity map overhead
+        $placeholders = implode(',', array_fill(0, count($abilityKeys), '?'));
+        $rows = $this->em->getConnection()->fetchAllAssociative(
+            "SELECT id, ability_key FROM main_effect WHERE ability_key IN ({$placeholders})",
+            array_values($abilityKeys),
+        );
+        foreach ($rows as $row) {
+            $this->effectIdCache[$row['ability_key']] ??= (int) $row['id'];
+        }
+    }
+
+    public function computeSlug(array $data): string
+    {
+        return $this->buildSlug($data);
     }
 
     /**
@@ -81,6 +131,51 @@ class CardGroupBuilder
     {
         $conn = $em->getConnection();
 
+        // Pass 1 — in-memory dedup.
+        // Two effects in the same batch can independently get the same text combination
+        // (e.g. different abilityKeys whose translated texts happen to be identical).
+        // Doctrine would then try to UPDATE/INSERT both rows, violating uniq_main_effect_texts.
+        // Fix: detect these duplicates before hitting the DB and merge them into one entity.
+        $textToCanonical = [];
+        foreach ($this->effectCache as $cacheKey => $effect) {
+            // Same skip as Pass 2: managed effects not touched this batch can't collide.
+            // Also avoids triggering lazy-load on Doctrine proxy references.
+            if ($effect->getId() !== null && !isset($this->dirtyEffects[spl_object_id($effect)])) {
+                continue;
+            }
+
+            $comboKey = sprintf('%s|%s|%s|%s|%s',
+                $effect->getTextFr() ?? '',
+                $effect->getTextEn() ?? '',
+                $effect->getTextDe() ?? '',
+                $effect->getTextEs() ?? '',
+                $effect->getTextIt() ?? '',
+            );
+
+            if ($comboKey === '||||') {
+                continue;
+            }
+
+            if (isset($textToCanonical[$comboKey])) {
+                $canonical = $textToCanonical[$comboKey];
+                if ($canonical === $effect) {
+                    continue; // same object under two cache keys — nothing to merge
+                }
+                $em->detach($effect);
+
+                foreach ($this->groupCache as $group) {
+                    if ($group->getEffect1() === $effect) $group->setEffect1($canonical);
+                    if ($group->getEffect2() === $effect) $group->setEffect2($canonical);
+                    if ($group->getEffect3() === $effect) $group->setEffect3($canonical);
+                }
+
+                $this->effectCache[$cacheKey] = $canonical;
+            } else {
+                $textToCanonical[$comboKey] = $effect;
+            }
+        }
+
+        // Pass 2 — DB dedup: match each effect against its DB row by text combo.
         $selectSql = "SELECT id FROM main_effect
                       WHERE COALESCE(text_fr,'') = :fr AND COALESCE(text_en,'') = :en
                         AND COALESCE(text_de,'') = :de AND COALESCE(text_es,'') = :es
@@ -88,6 +183,11 @@ class CardGroupBuilder
                       LIMIT 1";
 
         foreach ($this->effectCache as $text => $effect) {
+            // Managed effects whose text wasn't touched this batch can't violate the constraint.
+            if ($effect->getId() !== null && !isset($this->dirtyEffects[spl_object_id($effect)])) {
+                continue;
+            }
+
             $params = [
                 'fr' => $effect->getTextFr() ?? '',
                 'en' => $effect->getTextEn() ?? '',
@@ -96,16 +196,22 @@ class CardGroupBuilder
                 'it' => $effect->getTextIt() ?? '',
             ];
 
+            if ($params === ['fr' => '', 'en' => '', 'de' => '', 'es' => '', 'it' => '']) {
+                continue;
+            }
+
             $foundId = $conn->fetchOne($selectSql, $params);
 
             if (!$foundId && $effect->getId() === null) {
-                // New effect not in DB yet — INSERT directly via DBAL.
-                // ON CONFLICT DO NOTHING guards against the edge case where the composite
-                // was inserted by a concurrent process between our SELECT and this INSERT.
-                $conn->executeStatement(
-                    'INSERT INTO main_effect (text_fr, text_en, text_de, text_es, text_it, keywords)
-                     VALUES (:fr_v, :en_v, :de_v, :es_v, :it_v, :kw)
-                     ON CONFLICT DO NOTHING',
+                // New effect: INSERT via DBAL. The DO UPDATE is a no-op that forces
+                // RETURNING to fire even on conflict, giving us the canonical row id
+                // without a separate SELECT that could miss when text combos differ.
+                $foundId = $conn->fetchOne(
+                    'INSERT INTO main_effect (text_fr, text_en, text_de, text_es, text_it, keywords, ability_key)
+                     VALUES (:fr_v, :en_v, :de_v, :es_v, :it_v, :kw, :ak)
+                     ON CONFLICT (COALESCE(text_fr,\'\'), COALESCE(text_en,\'\'), COALESCE(text_de,\'\'), COALESCE(text_es,\'\'), COALESCE(text_it,\'\'))
+                     DO UPDATE SET text_fr = main_effect.text_fr
+                     RETURNING id',
                     [
                         'fr_v' => $effect->getTextFr(),
                         'en_v' => $effect->getTextEn(),
@@ -113,9 +219,9 @@ class CardGroupBuilder
                         'es_v' => $effect->getTextEs(),
                         'it_v' => $effect->getTextIt(),
                         'kw'   => $effect->getKeywords() !== null ? json_encode($effect->getKeywords()) : null,
+                        'ak'   => $effect->getAbilityKey(),
                     ]
                 );
-                $foundId = $conn->fetchOne($selectSql, $params);
             }
 
             if (!$foundId) {
@@ -147,6 +253,54 @@ class CardGroupBuilder
         }
 
         $this->newEffects = [];
+
+        // Flush keywords for proxy-based effects in one batch UPDATE per chunk.
+        if (!empty($this->pendingKeywords)) {
+            $conn   = $em->getConnection();
+            $chunks = array_chunk($this->pendingKeywords, 500, preserve_keys: true);
+            foreach ($chunks as $chunk) {
+                $values = [];
+                $params = [];
+                $i      = 0;
+                foreach ($chunk as $id => $keywords) {
+                    $values[]        = "(:id_{$i}::int, :kw_{$i}::jsonb)";
+                    $params["id_{$i}"] = $id;
+                    $params["kw_{$i}"] = json_encode($keywords);
+                    $i++;
+                }
+                $conn->executeStatement(
+                    sprintf(
+                        'UPDATE main_effect SET keywords = v.kw
+                         FROM (VALUES %s) AS v(id, kw)
+                         WHERE main_effect.id = v.id AND main_effect.keywords IS NULL',
+                        implode(', ', $values),
+                    ),
+                    $params,
+                );
+            }
+            $this->pendingKeywords = [];
+        }
+
+        // Safety net: any effect still not managed by Doctrine (detached or new) gets re-attached.
+        // This covers edge cases where the redirect above missed an entity.
+        foreach ($this->groupCache as $group) {
+            foreach (['getEffect1', 'getEffect2', 'getEffect3'] as $getter) {
+                $fx = $group->{$getter}();
+                if ($fx === null || $em->contains($fx)) {
+                    continue;
+                }
+                $fxId = $fx->getId();
+                $setter = 'set' . substr($getter, 3);
+                if ($fxId !== null) {
+                    $managed = $em->find(MainEffect::class, $fxId);
+                    if ($managed !== null) {
+                        $group->{$setter}($managed);
+                    }
+                } else {
+                    $em->persist($fx);
+                }
+            }
+        }
     }
 
     /**
@@ -180,10 +334,10 @@ class CardGroupBuilder
 
         $language = explode('-', $locale)[0];
 
-        // Gameplay flags — canonical from any locale (fr-fr is processed first)
-        $group->setIsBanned((bool) ($data['isBanned'] ?? false));
-        $group->setIsErrated((bool) ($data['isErrated'] ?? false));
-        $group->setIsSuspended((bool) ($data['isSuspended'] ?? false));
+        // Gameplay flags — only written when present in data (translation-only payloads omit these)
+        if (array_key_exists('isBanned', $data)) $group->setIsBanned((bool) $data['isBanned']);
+        if (array_key_exists('isErrated', $data)) $group->setIsErrated((bool) $data['isErrated']);
+        if (array_key_exists('isSuspended', $data)) $group->setIsSuspended((bool) $data['isSuspended']);
 
         if (!$group->getRarity() && isset($data['rarity']['reference'])) {
             $rarity = $this->rarityRepository->findOneByReference($data['rarity']['reference']);
@@ -192,10 +346,12 @@ class CardGroupBuilder
             }
         }
 
-        if (isset($data['cardHistoryStatus']['reference'])) {
-            $group->setCardHistoryStatus($this->findOrCreateHistoryStatus($data['cardHistoryStatus'], $locale));
-        } else {
-            $group->setCardHistoryStatus(null);
+        if (array_key_exists('cardHistoryStatus', $data)) {
+            if (isset($data['cardHistoryStatus']['reference'])) {
+                $group->setCardHistoryStatus($this->findOrCreateHistoryStatus($data['cardHistoryStatus'], $locale));
+            } else {
+                $group->setCardHistoryStatus(null);
+            }
         }
 
         if (array_key_exists('cardType', $data) && isset($data['cardType']['reference'])) {
@@ -210,9 +366,10 @@ class CardGroupBuilder
         }
 
         if (isset($data['mainFaction']['reference'])) {
-            $faction = $this->factionRepository->findOneByCode($data['mainFaction']['reference']);
-            if ($faction) {
-                $group->setFaction($faction);
+            $code = $data['mainFaction']['reference'];
+            $this->factionCache[$code] ??= $this->factionRepository->findOneByCode($code);
+            if ($this->factionCache[$code]) {
+                $group->setFaction($this->factionCache[$code]);
             }
         }
 
@@ -220,8 +377,8 @@ class CardGroupBuilder
         if ($locale === 'en-us') {
             if (array_key_exists('elements', $data)) {
                 $elements = $data['elements'];
-                $group->setMainCost(isset($elements['MAIN_COST']) ? (int) $elements['MAIN_COST'] : null);
-                $group->setRecallCost(isset($elements['RECALL_COST']) ? (int) $elements['RECALL_COST'] : null);
+                $group->setMainCost($this->parseCost($elements['MAIN_COST'] ?? null));
+                $group->setRecallCost($this->parseCost($elements['RECALL_COST'] ?? null));
                 $group->setOceanPower(isset($elements['OCEAN_POWER']) ? (int) $elements['OCEAN_POWER'] : null);
                 $group->setMountainPower(isset($elements['MOUNTAIN_POWER']) ? (int) $elements['MOUNTAIN_POWER'] : null);
                 $group->setForestPower(isset($elements['FOREST_POWER']) ? (int) $elements['FOREST_POWER'] : null);
@@ -229,9 +386,11 @@ class CardGroupBuilder
 
                 if (array_key_exists('MAIN_EFFECT', $elements)) {
                     $parts = array_values(array_filter(array_map('trim', explode('  ', $elements['MAIN_EFFECT']))));
-                    $group->setEffect1($this->findOrCreateEffect($parts[0] ?? null, 'en'));
-                    $group->setEffect2($this->findOrCreateEffect($parts[1] ?? null, 'en'));
-                    $group->setEffect3($this->findOrCreateEffect($parts[2] ?? null, 'en'));
+                    // MAIN_EFFECT_KEYS carries cardEffect.reference values from Equinox JSON (abilityKey lookup)
+                    $keys = $elements['MAIN_EFFECT_KEYS'] ?? [];
+                    $group->setEffect1($this->findOrCreateEffect($parts[0] ?? null, 'en', $keys[0] ?? null));
+                    $group->setEffect2($this->findOrCreateEffect($parts[1] ?? null, 'en', $keys[1] ?? null));
+                    $group->setEffect3($this->findOrCreateEffect($parts[2] ?? null, 'en', $keys[2] ?? null));
                 }
             }
         }
@@ -257,14 +416,18 @@ class CardGroupBuilder
                 $parts  = array_values(array_filter(array_map('trim', explode('  ', $elements['MAIN_EFFECT']))));
                 $setter = 'setText' . ucfirst($language);
 
-                if (isset($parts[0]) && $group->getEffect1() && method_exists($group->getEffect1(), $setter)) {
-                    $group->getEffect1()->{$setter}($parts[0]);
-                }
-                if (isset($parts[1]) && $group->getEffect2() && method_exists($group->getEffect2(), $setter)) {
-                    $group->getEffect2()->{$setter}($parts[1]);
-                }
-                if (isset($parts[2]) && $group->getEffect3() && method_exists($group->getEffect3(), $setter)) {
-                    $group->getEffect3()->{$setter}($parts[2]);
+                foreach ([
+                    [$parts[0] ?? null, $group->getEffect1()],
+                    [$parts[1] ?? null, $group->getEffect2()],
+                    [$parts[2] ?? null, $group->getEffect3()],
+                ] as [$part, $fx]) {
+                    // Skip effects with an ID — they're pre-populated with all locale texts.
+                    // Calling getText*() on a Doctrine proxy triggers lazy-load; getId() does not.
+                    if ($part === null || $fx === null || $fx->getId() !== null) {
+                        continue;
+                    }
+                    $fx->{$setter}($part);
+                    $this->dirtyEffects[spl_object_id($fx)] = true;
                 }
             } else {
                 $translation->setMainEffect(null);
@@ -378,34 +541,72 @@ class CardGroupBuilder
         }
     }
 
-    private function findOrCreateEffect(?string $text, string $locale): ?MainEffect
+    private function findOrCreateEffect(?string $text, string $locale, ?string $abilityKey = null): ?MainEffect
     {
-        if ($text === null) return null;
+        if ($text === null && $abilityKey === null) return null;
 
-        $text = trim($text);
-        if ($text === '') return null;
+        $text     = $text !== null ? trim($text) : null;
+        $cacheKey = $abilityKey ?? $text;
 
-        if (isset($this->effectCache[$text])) {
-            return $this->effectCache[$text];
+        if ($cacheKey === '' || $cacheKey === null) return null;
+
+        if (isset($this->effectCache[$cacheKey])) {
+            return $this->effectCache[$cacheKey];
         }
 
-        $finder = 'findOneByText' . ucfirst($locale);
-        $effect = $this->mainEffectRepository->{$finder}($text);
+        // Fast path: effect pre-populated by app:import:abilities:equinox — use a proxy,
+        // no entity hydration, no identity-map lookup, no DB query.
+        if ($abilityKey !== null && isset($this->effectIdCache[$abilityKey])) {
+            $id     = $this->effectIdCache[$abilityKey];
+            $effect = $this->em->getReference(MainEffect::class, $id);
 
-        if (!$effect) {
+            if ($locale === 'en' && $text !== null) {
+                $keywords = $this->effectParser->parseKeywords($text);
+                if (!empty($keywords)) {
+                    $this->pendingKeywords[$id] ??= $keywords;
+                }
+            }
+
+            return $this->effectCache[$cacheKey] = $effect;
+        }
+
+        // Fallback ORM path (effect not pre-populated or no abilityKey)
+        $effect = null;
+        if ($abilityKey !== null) {
+            $effect = $this->mainEffectRepository->findOneByAbilityKey($abilityKey);
+        }
+
+        if ($effect === null && $text !== null) {
+            $finder = 'findOneByText' . ucfirst($locale);
+            $effect = $this->mainEffectRepository->{$finder}($text);
+        }
+
+        if ($effect === null) {
+            if ($text === null) {
+                return null;
+            }
             $effect = new MainEffect();
-            $setter = 'setText' . ucfirst($locale);
-            $effect->{$setter}($text);
-            $this->newEffects[$text] = $effect;
+            if ($abilityKey !== null) {
+                $effect->setAbilityKey($abilityKey);
+            }
+            $this->newEffects[$cacheKey] = $effect;
         }
 
-        // Parse keywords from the French text (canonical locale)
-        if ($locale === 'en' && $effect->getKeywords() === null) {
+        if ($text !== null) {
+            $getter = 'getText' . ucfirst($locale);
+            if ($effect->{$getter}() === null) {
+                $setter = 'setText' . ucfirst($locale);
+                $effect->{$setter}($text);
+                $this->dirtyEffects[spl_object_id($effect)] = true;
+            }
+        }
+
+        if ($locale === 'en' && $text !== null && $effect->getKeywords() === null) {
             $keywords = $this->effectParser->parseKeywords($text);
             $effect->setKeywords($keywords ?: null);
         }
 
-        return $this->effectCache[$text] = $effect;
+        return $this->effectCache[$cacheKey] = $effect;
     }
 
     private function findOrCreateCardType(array $data, string $locale): CardType
@@ -452,6 +653,13 @@ class CardGroupBuilder
         }
 
         return $subType;
+    }
+
+    private function parseCost(?string $value): ?int
+    {
+        if ($value === null) return null;
+        $numeric = preg_replace('/\D/', '', $value);
+        return $numeric !== '' ? (int) $numeric : null;
     }
 
     private function findOrCreateHistoryStatus(array $data, string $locale): CardHistoryStatus

@@ -135,6 +135,37 @@ class MainEffectRepository extends ServiceEntityRepository
         return $effects[0];
     }
 
+    public function findOneByAbilityKey(string $key): ?MainEffect
+    {
+        return $this->findOneBy(['abilityKey' => $key]);
+    }
+
+    /**
+     * Batch-load effects by abilityKey — used to pre-warm the builder cache.
+     *
+     * @param  string[]              $keys
+     * @return array<string, MainEffect>
+     */
+    public function getByAbilityKeys(array $keys): array
+    {
+        if (empty($keys)) {
+            return [];
+        }
+
+        $effects = $this->createQueryBuilder('e')
+            ->where('e.abilityKey IN (:keys)')
+            ->setParameter('keys', array_values(array_unique($keys)))
+            ->getQuery()
+            ->getResult();
+
+        $map = [];
+        foreach ($effects as $effect) {
+            $map[$effect->getAbilityKey()] = $effect;
+        }
+
+        return $map;
+    }
+
     public function findOneByTextEn(string $text): ?MainEffect
     {
         return $this->findOneBy(['textEn' => $text]);

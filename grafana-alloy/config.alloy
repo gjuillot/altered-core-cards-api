@@ -33,6 +33,42 @@ prometheus.scrape "node" {
   scrape_interval = "60s"
 }
 
+// Logs nginx → Loki
+local.file_match "nginx_access" {
+  path_targets = [{"__path__" = "/var/log/nginx/access.log", "job" = "nginx"}]
+}
+
+loki.source.file "nginx" {
+  targets    = local.file_match.nginx_access.targets
+  forward_to = [loki.process.nginx_parse.receiver]
+}
+
+loki.process "nginx_parse" {
+  stage.regex {
+    expression = `^(?P<remote_addr>\S+) - \S+ \[(?P<time>[^\]]+)\] "(?P<method>\S+) (?P<request>[^"]+) HTTP/[^"]+" (?P<status>\d+) \d+ "[^"]*" "[^"]*" (?P<duration>\S+)$`
+  }
+  stage.labels {
+    values = {
+      method  = "method",
+      status  = "status",
+    }
+  }
+  stage.label_drop {
+    values = ["filename"]
+  }
+  forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = env("GRAFANA_CLOUD_LOKI_URL")
+    basic_auth {
+      username = env("GRAFANA_CLOUD_LOKI_USER")
+      password = env("GRAFANA_CLOUD_LOKI_APIKEY")
+    }
+  }
+}
+
 // Push vers Grafana Cloud — à configurer avec les credentials du stack
 prometheus.remote_write "metrics_service" {
   endpoint {
