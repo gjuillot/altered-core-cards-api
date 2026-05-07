@@ -137,6 +137,7 @@ random:
   rarity: Rarity
   all: All
   generate: Generate
+  regenerate: Regenerate
   shuffle: Shuffle
   hint: Click "Generate" to draw random cards
   loading: Loading…

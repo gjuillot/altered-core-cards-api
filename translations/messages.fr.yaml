@@ -137,6 +137,7 @@ random:
   rarity: Rarité
   all: Tous
   generate: Générer
+  regenerate: Regénérer
   shuffle: Mélanger
   hint: "Cliquez sur « Générer » pour piocher des cartes aléatoires"
   loading: Chargement…
