@@ -54,23 +54,38 @@ final class MeilisearchIndexCommand extends Command
 
         $indexed = 0;
         foreach ($this->cardDocumentRepository->streamDocuments() as $batch) {
-            // Encode ourselves with JSON_INVALID_UTF8_IGNORE so that any residual
-            // invalid byte sequences are silently dropped instead of producing lone
-            // surrogates that PHP considers valid but Meilisearch's Rust parser rejects.
             $json = json_encode($batch, JSON_INVALID_UTF8_IGNORE);
 
             if ($json === false) {
-                foreach ($batch as $doc) {
-                    if (json_encode($doc, JSON_INVALID_UTF8_IGNORE) === false) {
-                        $io->warning(sprintf('Card ID %d skipped (JSON error: %s)', $doc['id'], json_last_error_msg()));
-                    }
-                }
                 $indexed += count($batch);
                 $progressBar->advance(count($batch));
                 continue;
             }
 
-            $this->meilisearch->getIndex()->addDocumentsJson($json);
+            try {
+                $this->meilisearch->getIndex()->addDocumentsJson($json);
+            } catch (\Throwable $e) {
+                // One document in this batch is malformed — send them one by one to identify it.
+                $progressBar->clear();
+                foreach ($batch as $doc) {
+                    $docJson = json_encode($doc, JSON_INVALID_UTF8_IGNORE);
+                    if ($docJson === false) {
+                        $io->warning(sprintf('Card ID %d — json_encode failed', $doc['id']));
+                        continue;
+                    }
+                    try {
+                        $this->meilisearch->getIndex()->addDocumentsJson($docJson);
+                    } catch (\Throwable $inner) {
+                        $io->warning(sprintf(
+                            'Card ID %d skipped — Meilisearch rejected it: %s',
+                            $doc['id'],
+                            $inner->getMessage(),
+                        ));
+                    }
+                }
+                $progressBar->display();
+            }
+
             $indexed += count($batch);
             $progressBar->advance(count($batch));
         }
