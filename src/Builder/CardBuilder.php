@@ -161,7 +161,9 @@ class CardBuilder
                 $card->setTransfuge(true);
             }
 
-            $card->setCardNumber((int) substr($cnf, 4, 3));
+            if ($cnf !== null) {
+                $card->setCardNumber((int) substr($cnf, 4, 3));
+            }
         }
         if (array_key_exists('allImagePath', $data)) {
             $card->setAllImagePath($data['allImagePath']);

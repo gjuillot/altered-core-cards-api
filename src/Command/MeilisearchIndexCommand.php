@@ -54,7 +54,38 @@ final class MeilisearchIndexCommand extends Command
 
         $indexed = 0;
         foreach ($this->cardDocumentRepository->streamDocuments() as $batch) {
-            $this->meilisearch->getIndex()->addDocuments($batch);
+            $json = json_encode($batch, JSON_INVALID_UTF8_IGNORE);
+
+            if ($json === false) {
+                $indexed += count($batch);
+                $progressBar->advance(count($batch));
+                continue;
+            }
+
+            try {
+                $this->meilisearch->getIndex()->addDocumentsJson($json);
+            } catch (\Throwable $e) {
+                // One document in this batch is malformed — send them one by one to identify it.
+                $progressBar->clear();
+                foreach ($batch as $doc) {
+                    $docJson = json_encode($doc, JSON_INVALID_UTF8_IGNORE);
+                    if ($docJson === false) {
+                        $io->warning(sprintf('Card ID %d — json_encode failed', $doc['id']));
+                        continue;
+                    }
+                    try {
+                        $this->meilisearch->getIndex()->addDocumentsJson($docJson);
+                    } catch (\Throwable $inner) {
+                        $io->warning(sprintf(
+                            'Card ID %d skipped — Meilisearch rejected it: %s',
+                            $doc['id'],
+                            $inner->getMessage(),
+                        ));
+                    }
+                }
+                $progressBar->display();
+            }
+
             $indexed += count($batch);
             $progressBar->advance(count($batch));
         }

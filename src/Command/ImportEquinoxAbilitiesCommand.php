@@ -98,15 +98,11 @@ class ImportEquinoxAbilitiesCommand extends Command
                     if (!$abilityKey) continue;
 
                     if (!isset($effects[$abilityKey])) {
-                        // Parse idGd components from abilityKey "{t}_{c}_{e}"
-                        $ak = explode('_', $abilityKey);
-                        [$tIdGd, $cIdGd, $eIdGd] = [(int)($ak[0] ?? 0), (int)($ak[1] ?? 0), (int)($ak[2] ?? 0)];
-
                         $effects[$abilityKey] = [
                             'fr' => null, 'en' => null, 'de' => null, 'es' => null, 'it' => null,
-                            'trigger_idgd'   => $tIdGd,
-                            'condition_idgd' => $cIdGd,
-                            'effect_idgd'    => $eIdGd,
+                            'trigger_idgd'   => 0,
+                            'condition_idgd' => 0,
+                            'effect_idgd'    => 0,
                         ];
                     }
 
@@ -116,11 +112,28 @@ class ImportEquinoxAbilitiesCommand extends Command
                         $idGd = (int) ($el['idGd'] ?? 0);
                         $type = strtolower($el['type'] ?? '');
 
+                        // Equinox element types vs our table naming:
+                        //   TRIGGER   → ability_trigger  (position 1 in t_c_e key)
+                        //   OUTPUT    → ability_condition (position 2 in t_c_e key — the main output text)
+                        //   CONDITION → ability_effect    (position 3 in t_c_e key — the conditional clause)
                         $partType = match ($type) {
                             'trigger'   => 'trigger',
-                            'condition' => 'condition',
-                            default     => 'effect',
+                            'output'    => 'condition',
+                            'condition' => 'effect',
+                            default     => 'condition',
                         };
+
+                        // Use idGd from elements directly — works regardless of reference format
+                        if ($idGd > 0 && $effects[$abilityKey]["{$partType}_idgd"] === 0) {
+                            $effects[$abilityKey]["{$partType}_idgd"] = $idGd;
+                        }
+
+                        // Always register the part so it exists in ability tables even when
+                        // this JSON file provides no translations (e.g. UNIQUE cards reference
+                        // shared effects without redefining their text).
+                        if ($idGd > 0 && !isset($parts[$partType][$idGd])) {
+                            $parts[$partType][$idGd] = ['fr' => null, 'en' => null, 'de' => null, 'es' => null, 'it' => null];
+                        }
 
                         foreach (self::LOCALE_MAP as $apiLocale => $col) {
                             $text = $el['translations'][$apiLocale]['text'] ?? null;
@@ -132,9 +145,6 @@ class ImportEquinoxAbilitiesCommand extends Command
                             $elementTexts[$col][] = $text;
 
                             if ($idGd > 0) {
-                                if (!isset($parts[$partType][$idGd])) {
-                                    $parts[$partType][$idGd] = ['fr' => null, 'en' => null, 'de' => null, 'es' => null, 'it' => null];
-                                }
                                 $parts[$partType][$idGd][$col] ??= $text;
                             }
                         }
@@ -221,14 +231,26 @@ class ImportEquinoxAbilitiesCommand extends Command
             $io->writeln(sprintf('  %s: <info>%d</info> upserted', $table, $count));
         }
 
-        // ── 3. Load alteredId → internal id maps ──────────────────────────────
+        // ── 3. Load alteredId → internal id maps + texts ─────────────────────
 
         $io->section('Loading ability ID maps…');
 
-        $idMaps = [];
+        $idMaps    = [];
+        $textCache = []; // type → altered_id → {fr,en,de,es,it}
         foreach ($tableMap as $type => $table) {
-            $rows = $this->connection->fetchAllAssociative("SELECT id, altered_id FROM {$table}");
-            $idMaps[$type] = array_column($rows, 'id', 'altered_id');
+            $rows = $this->connection->fetchAllAssociative(
+                "SELECT id, altered_id, text_fr, text_en, text_de, text_es, text_it FROM {$table}"
+            );
+            foreach ($rows as $row) {
+                $idMaps[$type][$row['altered_id']] = $row['id'];
+                $textCache[$type][$row['altered_id']] = [
+                    'fr' => $row['text_fr'],
+                    'en' => $row['text_en'],
+                    'de' => $row['text_de'],
+                    'es' => $row['text_es'],
+                    'it' => $row['text_it'],
+                ];
+            }
         }
 
         // ── 4. Upsert main_effect ─────────────────────────────────────────────
@@ -249,6 +271,22 @@ class ImportEquinoxAbilitiesCommand extends Command
             $tId = $data['trigger_idgd'] > 0   ? ($idMaps['trigger'][$data['trigger_idgd']]     ?? null) : null;
             $cId = $data['condition_idgd'] > 0 ? ($idMaps['condition'][$data['condition_idgd']] ?? null) : null;
             $eId = $data['effect_idgd'] > 0    ? ($idMaps['effect'][$data['effect_idgd']]       ?? null) : null;
+
+            // When the JSON carries no element texts (e.g. serialized UNIQUE cards),
+            // fall back to concatenating texts from the ability component tables.
+            $hasText = ($data['en'] ?? '') !== '' || ($data['fr'] ?? '') !== '';
+            if (!$hasText) {
+                foreach (['fr', 'en', 'de', 'es', 'it'] as $col) {
+                    $parts = array_filter([
+                        $textCache['trigger'][$data['trigger_idgd']][$col]     ?? null,
+                        $textCache['condition'][$data['condition_idgd']][$col] ?? null,
+                        $textCache['effect'][$data['effect_idgd']][$col]       ?? null,
+                    ]);
+                    if ($parts) {
+                        $data[$col] = implode(' ', $parts);
+                    }
+                }
+            }
 
             if (isset($existingMap[$abilityKey])) {
                 if ($tId !== null || $cId !== null || $eId !== null) {

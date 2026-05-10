@@ -110,6 +110,54 @@ class CardGroupBuilder
         foreach ($rows as $row) {
             $this->effectIdCache[$row['ability_key']] ??= (int) $row['id'];
         }
+
+        // For ability_keys not found by name, build the combined text from ability component
+        // tables and look up by text. This handles UNIQUE serialized cards whose JSON carries
+        // a different Equinox ID for the same effect text (e.g. _195 vs _209).
+        $missing = array_filter($abilityKeys, fn($k) => !isset($this->effectIdCache[$k]));
+        if (empty($missing)) {
+            return;
+        }
+
+        $conn = $this->em->getConnection();
+
+        $tIdGds = array_unique(array_map(fn($k) => (int) (explode('_', $k)[0] ?? 0), $missing));
+        $cIdGds = array_unique(array_map(fn($k) => (int) (explode('_', $k)[1] ?? 0), $missing));
+        $eIdGds = array_unique(array_map(fn($k) => (int) (explode('_', $k)[2] ?? 0), $missing));
+
+        $tTexts = $conn->fetchAllKeyValue(
+            'SELECT altered_id, text_en FROM ability_trigger WHERE altered_id IN (' . implode(',', $tIdGds) . ')'
+        );
+        $cTexts = $conn->fetchAllKeyValue(
+            'SELECT altered_id, text_en FROM ability_condition WHERE altered_id IN (' . implode(',', $cIdGds) . ')'
+        );
+        $eTexts = $conn->fetchAllKeyValue(
+            'SELECT altered_id, text_en FROM ability_effect WHERE altered_id IN (' . implode(',', $eIdGds) . ')'
+        );
+
+        foreach ($missing as $abilityKey) {
+            $parts = explode('_', $abilityKey);
+            if (count($parts) !== 3) continue;
+
+            [$tIdGd, $cIdGd, $eIdGd] = [(int) $parts[0], (int) $parts[1], (int) $parts[2]];
+
+            $textParts = array_filter([
+                $tTexts[$tIdGd] ?? null,
+                $cTexts[$cIdGd] ?? null,
+                $eTexts[$eIdGd] ?? null,
+            ]);
+            if (empty($textParts)) continue;
+
+            $text = implode(' ', $textParts);
+            $row  = $conn->fetchAssociative(
+                'SELECT id FROM main_effect WHERE text_en = ? LIMIT 1',
+                [$text],
+            );
+
+            if ($row) {
+                $this->effectIdCache[$abilityKey] = (int) $row['id'];
+            }
+        }
     }
 
     public function computeSlug(array $data): string
@@ -384,9 +432,12 @@ class CardGroupBuilder
                 $group->setForestPower(isset($elements['FOREST_POWER']) ? (int) $elements['FOREST_POWER'] : null);
                 $group->setPermanent($elements['PERMANENT'] ?? null);
 
-                if (array_key_exists('MAIN_EFFECT', $elements)) {
-                    $parts = array_values(array_filter(array_map('trim', explode('  ', $elements['MAIN_EFFECT']))));
-                    // MAIN_EFFECT_KEYS carries cardEffect.reference values from Equinox JSON (abilityKey lookup)
+                // MAIN_EFFECT_KEYS carries cardEffect.reference values from Equinox JSON (abilityKey lookup).
+                // UNIQUE cards have no MAIN_EFFECT text but always carry MAIN_EFFECT_KEYS.
+                if (array_key_exists('MAIN_EFFECT', $elements) || !empty($elements['MAIN_EFFECT_KEYS'])) {
+                    $parts = array_key_exists('MAIN_EFFECT', $elements)
+                        ? array_values(array_filter(array_map('trim', explode('  ', $elements['MAIN_EFFECT']))))
+                        : [];
                     $keys = $elements['MAIN_EFFECT_KEYS'] ?? [];
                     $group->setEffect1($this->findOrCreateEffect($parts[0] ?? null, 'en', $keys[0] ?? null));
                     $group->setEffect2($this->findOrCreateEffect($parts[1] ?? null, 'en', $keys[1] ?? null));
@@ -431,7 +482,9 @@ class CardGroupBuilder
                 }
             } else {
                 $translation->setMainEffect(null);
-                if ($locale === 'en-us') {
+                // Only clear effect links when there are no MAIN_EFFECT_KEYS either.
+                // UNIQUE cards have no MAIN_EFFECT text but carry keys — effects linked above must not be erased.
+                if ($locale === 'en-us' && empty($elements['MAIN_EFFECT_KEYS'])) {
                     $group->setEffect1(null);
                     $group->setEffect2(null);
                     $group->setEffect3(null);

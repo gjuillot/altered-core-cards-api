@@ -131,6 +131,17 @@
     </div>
 
     <div class="w-3/4">
+        <div id="result-bar" class="hidden flex items-center justify-between mb-3">
+            <span id="result-count" class="text-xs text-gray-500 dark:text-gray-400"></span>
+            <button id="btn-regenerate"
+                    class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 active:scale-95 transition-transform">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                {{ 'random.regenerate'|trans }}
+            </button>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="cards-container">
             <div class="text-center text-gray-500 dark:text-gray-400 py-12">
                 {{ 'random.hint'|trans }}
@@ -151,6 +162,7 @@
         loading: {{ 'random.loading'|trans|json_encode(constant('JSON_HEX_TAG'))|raw }},
         no_results: {{ 'random.no_results'|trans|json_encode(constant('JSON_HEX_TAG'))|raw }},
         duplicate: {{ 'random.duplicate'|trans|json_encode(constant('JSON_HEX_TAG'))|raw }},
+        cards: {{ 'random.nb_cards'|trans|json_encode(constant('JSON_HEX_TAG'))|raw }},
     };
 
     const html = document.documentElement;
@@ -207,12 +219,18 @@
 
     function renderCards(cards) {
         const container = document.getElementById('cards-container');
+        const resultBar = document.getElementById('result-bar');
+        const resultCount = document.getElementById('result-count');
         container.innerHTML = '';
 
         if (cards.length === 0) {
             container.innerHTML = `<div class="text-center text-gray-500 dark:text-gray-400 py-12">${T.no_results}</div>`;
+            resultBar.classList.add('hidden');
             return;
         }
+
+        resultBar.classList.remove('hidden');
+        resultCount.textContent = `${cards.length} ${T.cards.toLowerCase()}`;
 
         const apiBase = window.location.origin;
         const apiTemplate = `${apiBase}/api/cards/reference/{ref}?locale={locale}`;
@@ -289,6 +307,7 @@
     }
 
     document.getElementById('btn-generate').addEventListener('click', fetchCards);
+    document.getElementById('btn-regenerate').addEventListener('click', fetchCards);
     document.getElementById('btn-shuffle').addEventListener('click', shuffleCards);
 
     document.addEventListener('DOMContentLoaded', () => {

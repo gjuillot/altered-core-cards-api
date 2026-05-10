@@ -62,6 +62,28 @@ final class CardDocumentRepository
 
     // ── Private ──────────────────────────────────────────────────────────────
 
+    private function sanitize(?string $text): ?string
+    {
+        if ($text === null) {
+            return null;
+        }
+        // Round-trip through json_encode/decode: JSON_INVALID_UTF8_IGNORE drops any
+        // byte sequence that is not valid UTF-8, guaranteeing the result can be
+        // re-encoded by the Meilisearch SDK without producing "trailing characters".
+        $encoded = json_encode($text, JSON_INVALID_UTF8_IGNORE | JSON_UNESCAPED_UNICODE);
+        if ($encoded === false) {
+            return null;
+        }
+        $clean = json_decode($encoded);
+        if (!is_string($clean)) {
+            return null;
+        }
+        // Strip ASCII control characters that are illegal in JSON strings
+        // (keep \t=0x09, \n=0x0A, \r=0x0D). No /u flag needed — these are
+        // single-byte values that never appear in UTF-8 multibyte sequences.
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $clean);
+    }
+
     private function buildSql(bool $whereCardId = false): string
     {
         $where = $whereCardId ? 'WHERE c.id = :id' : '';
@@ -125,12 +147,12 @@ final class CardDocumentRepository
         return [
             'id'             => (int) $row['id'],
             'reference'      => $row['reference'],
-            'name_fr'        => $row['name_fr'],
-            'name_en'        => $row['name_en'],
-            'main_effect_fr' => $row['main_effect_fr'],
-            'main_effect_en' => $row['main_effect_en'],
-            'echo_effect_fr' => $row['echo_effect_fr'],
-            'echo_effect_en' => $row['echo_effect_en'],
+            'name_fr'        => $this->sanitize($row['name_fr']),
+            'name_en'        => $this->sanitize($row['name_en']),
+            'main_effect_fr' => $this->sanitize($row['main_effect_fr']),
+            'main_effect_en' => $this->sanitize($row['main_effect_en']),
+            'echo_effect_fr' => $this->sanitize($row['echo_effect_fr']),
+            'echo_effect_en' => $this->sanitize($row['echo_effect_en']),
             'faction_code'   => $row['faction_code'],
             'set_reference'  => $row['set_reference'],
             'rarity'         => $row['rarity'],

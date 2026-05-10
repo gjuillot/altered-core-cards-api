@@ -34,9 +34,13 @@ final class ReferenceFilter extends AbstractFilter
             return;
         }
 
-        // Skip operator-style arrays like ['ne' => [...]] — handled by ExcludeReferenceFilter.
+        // Mixed array (e.g. [0=>'LANDMARK_PERMANENT', 'ne'=>['HERO']]): keep only the
+        // integer-keyed (positive) values; the 'ne' part is handled by ExcludeReferenceFilter.
         if (is_array($value) && !array_is_list($value)) {
-            return;
+            $value = array_values(array_filter($value, fn($v, $k) => is_int($k) && $v !== '', ARRAY_FILTER_USE_BOTH));
+            if (empty($value)) {
+                return;
+            }
         }
 
         $alias = $queryBuilder->getRootAliases()[0];

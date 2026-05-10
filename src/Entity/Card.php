@@ -49,7 +49,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
         ),
         new GetCollection(
             name: 'api_cards_collection',
-            provider: \App\State\CardCollectionProvider::class,
+            provider: \App\State\SearchAwareCollectionProvider::class,
             normalizationContext: ['groups' => ['card:list']],
             cacheHeaders: ['max_age' => 3600, 'shared_max_age' => 3600, 'vary' => ['Accept', 'Accept-Language']],
             paginationFetchJoinCollection: false,
