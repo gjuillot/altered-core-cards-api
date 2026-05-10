@@ -520,8 +520,12 @@ class CardGroupBuilder
         $rarity     = strtoupper($parts[5] ?? 'C');
 
         // Unique cards: each variant has its own CardGroup (different effects per copy)
+        // CORE and COREKS uniques get a set suffix so they never share a CardGroup
+        // (Equinox COREKS data has wrong mainFaction for some uniques, causing slug collisions)
         if ($rarity === 'U' && isset($parts[6]) && $parts[6] !== '') {
-            return sprintf('%s-%03d-U-%s', $faction, $cardNumber, $parts[6]);
+            $set    = strtoupper($parts[1] ?? '');
+            $suffix = in_array($set, ['CORE', 'COREKS'], true) ? '-' . $set : '';
+            return sprintf('%s-%03d-U-%s%s', $faction, $cardNumber, $parts[6], $suffix);
         }
 
         // Common / Rare: group all reprints together
