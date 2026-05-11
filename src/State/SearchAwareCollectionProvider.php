@@ -55,10 +55,21 @@ final class SearchAwareCollectionProvider implements ProviderInterface
             return $this->inner->provide($operation, $uriVariables, $context);
         }
 
-        $total = $this->fetchTotal($nameQuery, $this->buildFilter($filters));
+        $meiliFilter  = $this->buildFilter($filters);
+        $attrs        = $this->buildAttributesToSearchOn($filters);
+        $page         = max(1, (int) ($filters['page'] ?? 1));
+        $itemsPerPage = min(max(1, (int) ($filters['itemsPerPage'] ?? 30)), 1000);
+        $offset       = ($page - 1) * $itemsPerPage;
 
+        $total = $this->fetchTotal($nameQuery, $meiliFilter, $attrs);
         if ($total !== null) {
             $context['_meili_total'] = $total;
+        }
+
+        $ids = $this->fetchIds($nameQuery, $meiliFilter, $attrs, $itemsPerPage, $offset);
+        if ($ids !== null) {
+            $context['_meili_ids']      = $ids;
+            $context['filters']['page'] = 1; // Meilisearch already applied pagination; Doctrine fetches at OFFSET 0
         }
 
         return $this->inner->provide($operation, $uriVariables, $context);
@@ -81,8 +92,18 @@ final class SearchAwareCollectionProvider implements ProviderInterface
         return $trimmed !== '' ? $trimmed : null;
     }
 
+    /** Returns null when Meilisearch is unavailable (triggers LIKE fallback in CardNameFilter). */
+    private function fetchIds(string $query, ?string $filter, array $attributesToSearchOn, int $limit = 30, int $offset = 0): ?array
+    {
+        try {
+            return $this->meilisearch->searchIds($query, $attributesToSearchOn, $filter, $limit, $offset);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     /** Returns null when Meilisearch is unavailable (triggers Doctrine COUNT fallback). */
-    private function fetchTotal(string $query, ?string $filter): ?int
+    private function fetchTotal(string $query, ?string $filter, array $attributesToSearchOn = []): ?int
     {
         try {
             $params = ['limit' => 0];
@@ -91,10 +112,38 @@ final class SearchAwareCollectionProvider implements ProviderInterface
                 $params['filter'] = $filter;
             }
 
+            if (!empty($attributesToSearchOn)) {
+                $params['attributesToSearchOn'] = $attributesToSearchOn;
+            }
+
             return $this->meilisearch->getIndex()->search($query, $params)->getEstimatedTotalHits() ?? 0;
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Build the attributesToSearchOn list matching what CardNameFilter will pass to Meilisearch.
+     * When name[fr]=foo, search only French fields; name[en]=foo → English only; name=foo → all.
+     *
+     * @return string[]
+     */
+    private function buildAttributesToSearchOn(array $filters): array
+    {
+        $name = $filters['name'] ?? null;
+
+        if (!is_array($name)) {
+            return [];
+        }
+
+        $attrs = [];
+        foreach (array_keys($name) as $locale) {
+            $attrs[] = "name_{$locale}";
+            $attrs[] = "main_effect_{$locale}";
+            $attrs[] = "echo_effect_{$locale}";
+        }
+
+        return $attrs;
     }
 
     private function buildFilter(array $filters): ?string
