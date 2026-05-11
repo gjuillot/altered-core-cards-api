@@ -57,8 +57,10 @@ final class CardNameFilter extends AbstractFilter
         $isCardGroup = CardGroup::class === $resourceClass;
 
         // ── Search backend fast path ─────────────────────────────────────────
+        // SearchAwareCollectionProvider pre-fetches IDs with all active filters applied,
+        // avoiding the limit issue when thousands of unique variants share the same name.
         $this->profiler?->start('name', $this->searchBackend::class);
-        $ids = $this->resolveWithBackend($value);
+        $ids = $context['_meili_ids'] ?? $this->resolveWithBackend($value);
 
         if ($ids !== null) {
             $this->profiler?->stop('name', count($ids));

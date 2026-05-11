@@ -108,15 +108,23 @@ final class MeilisearchService
      * @param string[] $attributesToSearchOn  Restrict search to specific fields (e.g. locale-specific)
      * @return int[]
      */
-    public function searchIds(string $query = '', array $attributesToSearchOn = [], int $limit = 10000): array
+    public function searchIds(string $query = '', array $attributesToSearchOn = [], ?string $filter = null, int $limit = 10000, int $offset = 0): array
     {
         $params = [
             'limit'                => $limit,
             'attributesToRetrieve' => ['id'],
         ];
 
+        if ($offset > 0) {
+            $params['offset'] = $offset;
+        }
+
         if (!empty($attributesToSearchOn)) {
             $params['attributesToSearchOn'] = $attributesToSearchOn;
+        }
+
+        if ($filter !== null) {
+            $params['filter'] = $filter;
         }
 
         $results = $this->getIndex()->search($query ?: null, $params);
