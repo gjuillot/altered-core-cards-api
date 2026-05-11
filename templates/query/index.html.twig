@@ -909,6 +909,15 @@
         YZ: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300',
     };
 
+    function cdnImageUrl(card) {
+        const rarity = card.rarity?.reference ?? '';
+        if (rarity === 'UNIQUE') return null;
+        const ref = card.reference;
+        if (!ref) return null;
+        const set = ref.split('_')[1] ?? '';
+        return `https://cdn.alteredcore.org/cards/fr/${set}/${ref}.webp`;
+    }
+
     function setViewMode(mode) {
         viewMode = mode;
         document.getElementById('view-list-panel').classList.toggle('hidden', mode !== 'list');
@@ -973,7 +982,7 @@
             const cost    = card.mainCost ?? null;
             const fColor  = FACTION_COLORS[faction] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
             const rColor  = RARITY_COLORS[rarity] ?? 'bg-gray-400 text-white';
-            const img     = card.imagePath?.fr ?? card.imagePath?.en ?? null;
+            const img     = cdnImageUrl(card) ?? card.imagePath?.fr ?? card.imagePath?.en ?? null;
 
             const div = document.createElement('div');
             div.className = 'rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-800 flex flex-col';
