@@ -147,6 +147,11 @@ class CardGroup implements TimestampInterface
     #[ApiProperty(fetchEager: false)]
     private ?MainEffect $effect3 = null;
 
+    #[ORM\ManyToOne(targetEntity: MainEffect::class)]
+    #[Groups(['card_group:read', 'card:read'])]
+    #[ApiProperty(fetchEager: false)]
+    private ?MainEffect $echoEffect1 = null;
+
     #[ORM\ManyToOne(targetEntity: CardHistoryStatus::class, cascade: ['persist'])]
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
     #[ApiProperty(fetchEager: false)]
@@ -319,6 +324,9 @@ class CardGroup implements TimestampInterface
 
     public function getEffect3(): ?MainEffect { return $this->effect3; }
     public function setEffect3(?MainEffect $v): self { $this->effect3 = $v; return $this; }
+
+    public function getEchoEffect1(): ?MainEffect { return $this->echoEffect1; }
+    public function setEchoEffect1(?MainEffect $v): self { $this->echoEffect1 = $v; return $this; }
 
     public function getCardHistoryStatus(): ?CardHistoryStatus { return $this->cardHistoryStatus; }
     public function setCardHistoryStatus(?CardHistoryStatus $v): self { $this->cardHistoryStatus = $v; return $this; }

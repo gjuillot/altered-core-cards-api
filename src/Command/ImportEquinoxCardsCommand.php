@@ -385,6 +385,9 @@ class ImportEquinoxCardsCommand extends Command
         if (!empty($effectKeys['MAIN_EFFECT'])) {
             $enUsData['elements']['MAIN_EFFECT_KEYS'] = $effectKeys['MAIN_EFFECT'];
         }
+        if (!empty($effectKeys['ECHO_EFFECT'])) {
+            $enUsData['elements']['ECHO_EFFECT_KEYS'] = $effectKeys['ECHO_EFFECT'];
+        }
 
         // Equinox loreEntries carry all locale texts inline under `translations`.
         // Normalize to per-locale format that CardGroupBuilder.buildLoreEntries() expects.

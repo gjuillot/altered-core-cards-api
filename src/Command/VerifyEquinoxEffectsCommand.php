@@ -117,14 +117,14 @@ class VerifyEquinoxEffectsCommand extends Command
             }
 
             $effectKeys = $this->extractEffectKeys($data['cardElements'] ?? []);
-            $jsonKeys   = $effectKeys['MAIN_EFFECT'] ?? [];
-
-            $jsonTexts = $this->extractEffectTexts($data['cardElements'] ?? []);
+            $jsonTexts  = $this->extractEffectTexts($data['cardElements'] ?? []);
 
             $batch[$alteredId] = [
-                'reference' => $reference,
-                'jsonKeys'  => $jsonKeys,
-                'jsonTexts' => $jsonTexts['MAIN_EFFECT'] ?? [],
+                'reference'      => $reference,
+                'jsonKeys'       => $effectKeys['MAIN_EFFECT'] ?? [],
+                'jsonTexts'      => $jsonTexts['MAIN_EFFECT'] ?? [],
+                'jsonEchoKeys'   => $effectKeys['ECHO_EFFECT'] ?? [],
+                'jsonEchoTexts'  => $jsonTexts['ECHO_EFFECT'] ?? [],
             ];
 
             if (count($batch) >= self::BATCH_SIZE) {
@@ -185,12 +185,14 @@ class VerifyEquinoxEffectsCommand extends Command
                     c.reference,
                     me1.ability_key AS ek1, me1.text_en AS text1,
                     me2.ability_key AS ek2, me2.text_en AS text2,
-                    me3.ability_key AS ek3, me3.text_en AS text3
+                    me3.ability_key AS ek3, me3.text_en AS text3,
+                    mee.ability_key AS ek_echo, mee.text_en AS text_echo
              FROM card c
              LEFT JOIN card_group cg ON cg.id = c.card_group_id
              LEFT JOIN main_effect me1 ON me1.id = cg.effect1_id
              LEFT JOIN main_effect me2 ON me2.id = cg.effect2_id
              LEFT JOIN main_effect me3 ON me3.id = cg.effect3_id
+             LEFT JOIN main_effect mee ON mee.id = cg.echo_effect1_id
              WHERE c.altered_id IN ({$placeholders})",
             array_values($alteredIds),
         );
@@ -198,8 +200,10 @@ class VerifyEquinoxEffectsCommand extends Command
         $dbMap = [];
         foreach ($rows as $row) {
             $dbMap[$row['altered_id']] = [
-                'keys'  => [$row['ek1'], $row['ek2'], $row['ek3']],
-                'texts' => [$row['text1'], $row['text2'], $row['text3']],
+                'keys'      => [$row['ek1'], $row['ek2'], $row['ek3']],
+                'texts'     => [$row['text1'], $row['text2'], $row['text3']],
+                'echoKey'   => $row['ek_echo'],
+                'echoText'  => $row['text_echo'],
             ];
         }
 
@@ -229,7 +233,6 @@ class VerifyEquinoxEffectsCommand extends Command
                 $jsonText = isset($jsonTexts[$i]) ? mb_substr($jsonTexts[$i], 0, 60) : '';
                 $dbText   = isset($dbTexts[$i])   ? mb_substr($dbTexts[$i],   0, 60) : '';
 
-                // Alias: keys differ but DB text matches — same effect, different Equinox ID
                 $isAlias = $dbTexts[$i] !== null
                     && $this->buildExpectedText($jsonKey) === $dbTexts[$i];
 
@@ -240,6 +243,29 @@ class VerifyEquinoxEffectsCommand extends Command
                     $dbKey   ?? '(none)',
                     $jsonText,
                     $dbText,
+                    $isAlias ? 'alias' : 'mismatch',
+                ];
+                $cardMissed = true;
+            }
+
+            // echoEffect1
+            $jsonEchoKey  = $entry['jsonEchoKeys'][0] ?? null;
+            $dbEchoKey    = $dbMap[$alteredId]['echoKey'];
+
+            if ($jsonEchoKey !== $dbEchoKey) {
+                $jsonEchoText = isset($entry['jsonEchoTexts'][0]) ? mb_substr($entry['jsonEchoTexts'][0], 0, 60) : '';
+                $dbEchoText   = $dbMap[$alteredId]['echoText'] !== null ? mb_substr($dbMap[$alteredId]['echoText'], 0, 60) : '';
+
+                $isAlias = $dbMap[$alteredId]['echoText'] !== null
+                    && $this->buildExpectedText($jsonEchoKey) === $dbMap[$alteredId]['echoText'];
+
+                $mismatches[] = [
+                    $reference,
+                    'echoEffect1',
+                    $jsonEchoKey ?? '(none)',
+                    $dbEchoKey   ?? '(none)',
+                    $jsonEchoText,
+                    $dbEchoText,
                     $isAlias ? 'alias' : 'mismatch',
                 ];
                 $cardMissed = true;
