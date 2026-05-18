@@ -427,21 +427,35 @@ class CardGroupBuilder
                 $elements = $data['elements'];
                 $group->setMainCost($this->parseCost($elements['MAIN_COST'] ?? null));
                 $group->setRecallCost($this->parseCost($elements['RECALL_COST'] ?? null));
-                $group->setOceanPower(isset($elements['OCEAN_POWER']) ? (int) $elements['OCEAN_POWER'] : null);
-                $group->setMountainPower(isset($elements['MOUNTAIN_POWER']) ? (int) $elements['MOUNTAIN_POWER'] : null);
-                $group->setForestPower(isset($elements['FOREST_POWER']) ? (int) $elements['FOREST_POWER'] : null);
+                $group->setOceanPower($this->parseCost($elements['OCEAN_POWER'] ?? null));
+                $group->setMountainPower($this->parseCost($elements['MOUNTAIN_POWER'] ?? null));
+                $group->setForestPower($this->parseCost($elements['FOREST_POWER'] ?? null));
+                $group->setDisplayOceanPower(isset($elements['OCEAN_POWER']) ? (string) $elements['OCEAN_POWER'] : null);
+                $group->setDisplayMountainPower(isset($elements['MOUNTAIN_POWER']) ? (string) $elements['MOUNTAIN_POWER'] : null);
+                $group->setDisplayForestPower(isset($elements['FOREST_POWER']) ? (string) $elements['FOREST_POWER'] : null);
                 $group->setPermanent($elements['PERMANENT'] ?? null);
 
                 // MAIN_EFFECT_KEYS carries cardEffect.reference values from Equinox JSON (abilityKey lookup).
                 // UNIQUE cards have no MAIN_EFFECT text but always carry MAIN_EFFECT_KEYS.
                 if (array_key_exists('MAIN_EFFECT', $elements) || !empty($elements['MAIN_EFFECT_KEYS'])) {
-                    $parts = array_key_exists('MAIN_EFFECT', $elements)
-                        ? array_values(array_filter(array_map('trim', explode('  ', $elements['MAIN_EFFECT']))))
-                        : [];
-                    $keys = $elements['MAIN_EFFECT_KEYS'] ?? [];
-                    $group->setEffect1($this->findOrCreateEffect($parts[0] ?? null, 'en', $keys[0] ?? null));
-                    $group->setEffect2($this->findOrCreateEffect($parts[1] ?? null, 'en', $keys[1] ?? null));
-                    $group->setEffect3($this->findOrCreateEffect($parts[2] ?? null, 'en', $keys[2] ?? null));
+                    $keys         = $elements['MAIN_EFFECT_KEYS'] ?? [];
+                    $displayTexts = $elements['MAIN_EFFECT_DISPLAY_TEXTS'] ?? null;
+
+                    if ($displayTexts !== null) {
+                        // Use per-display texts: number of effect slots = number of displays.
+                        // Avoids misalignment when elements.MAIN_EFFECT has more double-space
+                        // segments than there are registered displays (e.g. GIGANTIC + inline {J}).
+                        $group->setEffect1($this->findOrCreateEffect($displayTexts[0] ?? null, 'en', $keys[0] ?? null));
+                        $group->setEffect2(array_key_exists(1, $displayTexts) ? $this->findOrCreateEffect($displayTexts[1], 'en', $keys[1] ?? null) : null);
+                        $group->setEffect3(array_key_exists(2, $displayTexts) ? $this->findOrCreateEffect($displayTexts[2], 'en', $keys[2] ?? null) : null);
+                    } else {
+                        $parts = array_key_exists('MAIN_EFFECT', $elements)
+                            ? array_values(array_filter(array_map('trim', explode('  ', $elements['MAIN_EFFECT']))))
+                            : [];
+                        $group->setEffect1($this->findOrCreateEffect($parts[0] ?? null, 'en', $keys[0] ?? null));
+                        $group->setEffect2($this->findOrCreateEffect($parts[1] ?? null, 'en', $keys[1] ?? null));
+                        $group->setEffect3($this->findOrCreateEffect($parts[2] ?? null, 'en', $keys[2] ?? null));
+                    }
                 }
             }
         }
