@@ -215,6 +215,7 @@ class CardGroupBuilder
                     if ($group->getEffect1() === $effect) $group->setEffect1($canonical);
                     if ($group->getEffect2() === $effect) $group->setEffect2($canonical);
                     if ($group->getEffect3() === $effect) $group->setEffect3($canonical);
+                    if ($group->getEchoEffect1() === $effect) $group->setEchoEffect1($canonical);
                 }
 
                 $this->effectCache[$cacheKey] = $canonical;
@@ -295,6 +296,7 @@ class CardGroupBuilder
                 if ($group->getEffect1() === $effect) $group->setEffect1($managed);
                 if ($group->getEffect2() === $effect) $group->setEffect2($managed);
                 if ($group->getEffect3() === $effect) $group->setEffect3($managed);
+                if ($group->getEchoEffect1() === $effect) $group->setEchoEffect1($managed);
             }
 
             $this->effectCache[$text] = $managed;
@@ -332,7 +334,7 @@ class CardGroupBuilder
         // Safety net: any effect still not managed by Doctrine (detached or new) gets re-attached.
         // This covers edge cases where the redirect above missed an entity.
         foreach ($this->groupCache as $group) {
-            foreach (['getEffect1', 'getEffect2', 'getEffect3'] as $getter) {
+            foreach (['getEffect1', 'getEffect2', 'getEffect3', 'getEchoEffect1'] as $getter) {
                 $fx = $group->{$getter}();
                 if ($fx === null || $em->contains($fx)) {
                     continue;
@@ -457,6 +459,17 @@ class CardGroupBuilder
                         $group->setEffect3($this->findOrCreateEffect($parts[2] ?? null, 'en', $keys[2] ?? null));
                     }
                 }
+
+                if (array_key_exists('ECHO_EFFECT', $elements) || !empty($elements['ECHO_EFFECT_KEYS'])) {
+                    $echoParts = array_key_exists('ECHO_EFFECT', $elements)
+                        ? array_values(array_filter(array_map('trim', explode('  ', $elements['ECHO_EFFECT']))))
+                        : [];
+                    $echoKeys  = $elements['ECHO_EFFECT_KEYS'] ?? [];
+                    $resolved  = $this->findOrCreateEffect($echoParts[0] ?? null, 'en', $echoKeys[0] ?? null);
+                    if ($resolved !== null) {
+                        $group->setEchoEffect1($resolved);
+                    }
+                }
             }
         }
 
@@ -506,8 +519,20 @@ class CardGroupBuilder
             }
             if (array_key_exists('ECHO_EFFECT', $elements)) {
                 $translation->setEchoEffect($elements['ECHO_EFFECT']);
+
+                $echoParts = array_values(array_filter(array_map('trim', explode('  ', $elements['ECHO_EFFECT']))));
+                $setter    = 'setText' . ucfirst($language);
+
+                $fx = $group->getEchoEffect1();
+                if (($echoParts[0] ?? null) !== null && $fx !== null && $fx->getId() === null) {
+                    $fx->{$setter}($echoParts[0]);
+                    $this->dirtyEffects[spl_object_id($fx)] = true;
+                }
             } else {
                 $translation->setEchoEffect(null);
+                if ($locale === 'en-us' && array_key_exists('ECHO_EFFECT_KEYS', $elements) && empty($elements['ECHO_EFFECT_KEYS'])) {
+                    $group->setEchoEffect1(null);
+                }
             }
         }
 
