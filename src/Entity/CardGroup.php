@@ -128,6 +128,15 @@ class CardGroup implements TimestampInterface
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
     private ?int $forestPower = null;
 
+    #[ORM\Column(length: 30, nullable: true)]
+    private ?string $displayOceanPower = null;
+
+    #[ORM\Column(length: 30, nullable: true)]
+    private ?string $displayMountainPower = null;
+
+    #[ORM\Column(length: 30, nullable: true)]
+    private ?string $displayForestPower = null;
+
     #[ORM\Column(type: 'string', nullable: true)]
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
     private ?string $permanent = null;
@@ -229,6 +238,17 @@ class CardGroup implements TimestampInterface
         return $result;
     }
 
+    #[Groups(['card_group:read', 'card:list', 'card:read'])]
+    #[SerializedName('displayPowers')]
+    public function getDisplayPowers(): array
+    {
+        return [
+            'ocean'    => $this->displayOceanPower,
+            'mountain' => $this->displayMountainPower,
+            'forest'   => $this->displayForestPower,
+        ];
+    }
+
     #[Groups(['card_group:read'])]
     #[SerializedName('cardRulings')]
     public function getSerializedCardRulings(): array
@@ -307,6 +327,15 @@ class CardGroup implements TimestampInterface
 
     public function getForestPower(): ?int { return $this->forestPower; }
     public function setForestPower(?int $v): self { $this->forestPower = $v; return $this; }
+
+    public function getDisplayOceanPower(): ?string { return $this->displayOceanPower; }
+    public function setDisplayOceanPower(?string $v): self { $this->displayOceanPower = $v; return $this; }
+
+    public function getDisplayMountainPower(): ?string { return $this->displayMountainPower; }
+    public function setDisplayMountainPower(?string $v): self { $this->displayMountainPower = $v; return $this; }
+
+    public function getDisplayForestPower(): ?string { return $this->displayForestPower; }
+    public function setDisplayForestPower(?string $v): self { $this->displayForestPower = $v; return $this; }
 
     public function getPermanent(): ?string { return $this->permanent; }
     public function setPermanent(?string $v): self { $this->permanent = $v; return $this; }
