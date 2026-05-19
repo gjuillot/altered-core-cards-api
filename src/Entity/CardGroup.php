@@ -360,13 +360,13 @@ class CardGroup implements TimestampInterface
     public function getCardHistoryStatus(): ?CardHistoryStatus { return $this->cardHistoryStatus; }
     public function setCardHistoryStatus(?CardHistoryStatus $v): self { $this->cardHistoryStatus = $v; return $this; }
 
-    public function isBanned(): bool { return $this->isBanned; }
+    public function getIsBanned(): bool { return $this->isBanned; }
     public function setIsBanned(bool $v): self { $this->isBanned = $v; return $this; }
 
-    public function isErrated(): bool { return $this->isErrated; }
+    public function getIsErrated(): bool { return $this->isErrated; }
     public function setIsErrated(bool $v): self { $this->isErrated = $v; return $this; }
 
-    public function isSuspended(): bool { return $this->isSuspended; }
+    public function getIsSuspended(): bool { return $this->isSuspended; }
     public function setIsSuspended(bool $v): self { $this->isSuspended = $v; return $this; }
 
     public function getCardRulings(): Collection { return $this->cardRulings; }
