@@ -30,7 +30,7 @@ class JsonbContains extends FunctionNode
     public function getSql(SqlWalker $sqlWalker): string
     {
         return sprintf(
-            '(%s @> %s::jsonb)',
+            '(%s::jsonb @> %s::jsonb)',
             $this->field->dispatch($sqlWalker),
             $this->value->dispatch($sqlWalker)
         );
