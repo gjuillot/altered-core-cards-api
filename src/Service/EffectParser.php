@@ -36,16 +36,21 @@ class EffectParser
     public const KW_DON                 = 'DON';
 
     private const PURE_KEYWORD_PATTERNS = [
-        '/^\#?\[\[Fugace\]\]/u'        => self::KW_FUGACE,
-        '/^\#?\[Éternel/u'             => self::KW_ETERNEL,
-        '/^\#?\[Gigantesque\]/u'       => self::KW_GIGANTESQUE,
-        '/^\#?\[Défenseu/u'            => self::KW_DEFENSEUR,
-        '/^\#?\[Aguerri/u'             => self::KW_AGUERRI,
-        '/^\#?\[Rafraîchissement\]/u'  => self::KW_RAFRAICHISSEMENT,
-        '/^\#?\[Repérage\]/u'          => self::KW_REPERAGE,
-        '/^\#?\[Coriace/u'             => self::KW_CORIACE,
-        '/^\#?\[Ravitaillez/u'         => null, // action, not a keyword
-        '/^\#?\[Sabotez/u'             => null, // action, not a keyword
+        '/^\#?\[FLEETING\]/u'              => self::KW_FUGACE,
+        '/^\#?\[ETERNAL\]/u'               => self::KW_ETERNEL,
+        '/^\#?\[GIGANTIC\]/u'              => self::KW_GIGANTESQUE,
+        '/^\#?\[DEFENDER\]/u'              => self::KW_DEFENSEUR,
+        '/^\#?\[COOLDOWN\]/u'              => self::KW_RAFRAICHISSEMENT,
+        '/^\#?\[SCOUT_\d+\]/u'             => self::KW_REPERAGE,
+        '/^\#?\[TOUGH(?:_\d+)?\]/u'        => self::KW_CORIACE,
+        '/^\#?\[ANCHORED\]/u'              => self::KW_ANCRE,
+        '/^\#?\[ASLEEP\]/u'                => self::KW_ENDORMI,
+        '/^\#?\[BOOSTED\]/u'               => self::KW_BOOSTE,
+        '/^\#?\[EXHAUSTED_RESUPPLY\]/u'    => null, // action, not a keyword
+        '/^\#?\[RESUPPLY\]/u'              => null, // action, not a keyword
+        '/^\#?\[SABOTAGE\]/u'              => null, // action, not a keyword
+        '/^\#?\[RUSH\]/u'                  => null, // action, not a keyword
+        '/^\#?\[GIFT\]/u'                  => null, // action, not a keyword
     ];
 
     /**
@@ -119,67 +124,51 @@ class EffectParser
     /**
      * Extract all keywords from the text.
      * Returns array of ['k' => 'KEYWORD_NAME', 'v' => int|null]
+     * Texts use uppercase English codes ([SCOUT_1], [TOUGH_3], [FLEETING], etc.) in all locales.
      */
     public function parseKeywords(string $text): array
     {
         $keywords = [];
         $seen     = [];
 
-        $this->extractReperage($text, $keywords, $seen);
-        $this->extractCoriace($text, $keywords, $seen);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Gigantesque\]/u', self::KW_GIGANTESQUE);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Défenseu[re]s?\]/u', self::KW_DEFENSEUR);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Aguerri[e]?s?\]/u', self::KW_AGUERRI);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Rafraîchissement\]/u', self::KW_RAFRAICHISSEMENT);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[\[Fugace\]\]/u', self::KW_FUGACE);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Éternel[le]?\]/u', self::KW_ETERNEL);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[\[Ancré[e]?\]\]/u', self::KW_ANCRE);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[\[Endormi[e]?s?\]\]/u', self::KW_ENDORMI);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[\[Boosté[e]?s?\]\]/u', self::KW_BOOSTE);
-        // Action keywords — Épuisé variant checked first
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Ravitaillez Épuisé\]/u', self::KW_RAVITAILLEZ_EPUISE);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Ravitaillez(?! Épuisé)\]/u', self::KW_RAVITAILLEZ);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Sabotez\]/u', self::KW_SABOTEZ);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Foncer\]/u', self::KW_FONCER);
-        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[Don\]/u', self::KW_DON);
-
-        return $keywords;
-    }
-
-    private function extractReperage(string $text, array &$keywords, array &$seen): void
-    {
-        if (preg_match('/\[Repérage\]\s*\{(\d+)\}/u', $text, $m)) {
-            $entry = ['k' => self::KW_REPERAGE, 'v' => (int) $m[1]];
-            $key   = self::KW_REPERAGE . ':' . $m[1];
-            if (!isset($seen[$key])) {
-                $keywords[]  = $entry;
-                $seen[$key]  = true;
+        // [SCOUT_N] — value is N
+        if (preg_match_all('/\[SCOUT_(\d+)\]/u', $text, $m)) {
+            foreach ($m[1] as $val) {
+                $key = self::KW_REPERAGE . ':' . $val;
+                if (!isset($seen[$key])) {
+                    $keywords[] = ['k' => self::KW_REPERAGE, 'v' => (int) $val];
+                    $seen[$key] = true;
+                }
             }
         }
-    }
 
-    private function extractCoriace(string $text, array &$keywords, array &$seen): void
-    {
-        // [Coriace N] or [Coriaces N] — numeric value
-        if (preg_match_all('/\[Coriaces?\s+(\d+)\]/u', $text, $matches)) {
-            foreach ($matches[1] as $val) {
+        // [TOUGH_N] — value is N
+        if (preg_match_all('/\[TOUGH_(\d+)\]/u', $text, $m)) {
+            foreach ($m[1] as $val) {
                 $key = self::KW_CORIACE . ':' . $val;
                 if (!isset($seen[$key])) {
                     $keywords[] = ['k' => self::KW_CORIACE, 'v' => (int) $val];
                     $seen[$key] = true;
                 }
             }
-            return;
         }
 
-        // [Coriace X] — variable value
-        if (preg_match('/\[Coriaces?\s+X\]/u', $text)) {
-            $key = self::KW_CORIACE . ':X';
-            if (!isset($seen[$key])) {
-                $keywords[] = ['k' => self::KW_CORIACE, 'v' => null];
-                $seen[$key] = true;
-            }
-        }
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[GIGANTIC\]/u', self::KW_GIGANTESQUE);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[DEFENDER\]/u', self::KW_DEFENSEUR);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[COOLDOWN\]/u', self::KW_RAFRAICHISSEMENT);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[FLEETING\]/u', self::KW_FUGACE);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[ETERNAL\]/u', self::KW_ETERNEL);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[ANCHORED\]/u', self::KW_ANCRE);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[ASLEEP\]/u', self::KW_ENDORMI);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[BOOSTED\]/u', self::KW_BOOSTE);
+        // Action keywords — EXHAUSTED_RESUPPLY checked before RESUPPLY
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[EXHAUSTED_RESUPPLY\]/u', self::KW_RAVITAILLEZ_EPUISE);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[RESUPPLY\]/u', self::KW_RAVITAILLEZ);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[SABOTAGE\]/u', self::KW_SABOTEZ);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[RUSH\]/u', self::KW_FONCER);
+        $this->extractSimpleKeyword($text, $keywords, $seen, '/\[GIFT\]/u', self::KW_DON);
+
+        return $keywords;
     }
 
     private function extractSimpleKeyword(string $text, array &$keywords, array &$seen, string $pattern, string $name): void

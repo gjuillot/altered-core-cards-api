@@ -65,11 +65,15 @@ class CardBuilder
         // ── Printing identity (set once, same for all locales) ────────────────
         $this->applyPrintingIdentity($card, $enData);
 
-        // ── Per-locale: translation + fr-fr specifics ────────────────────────
+        // ── Per-locale: CardGroup translation + Card translation + fr-fr specifics ─────
         foreach ($localizedPayloads as $locale => $payload) {
             if ($locale === 'en-us') {
                 continue;
             }
+            // Build CardGroupTranslation for this locale (name, mainEffect, echoEffect, lore…).
+            // Gameplay stats (costs, powers) are guarded by $locale === 'en-us' inside the builder,
+            // so calling this for fr-fr / de-de / … is safe and has no double-write side effects.
+            $this->cardGroupBuilder->build($cardGroup, $payload, $locale);
             $this->applyLocaleData($card, $payload, $locale);
         }
 

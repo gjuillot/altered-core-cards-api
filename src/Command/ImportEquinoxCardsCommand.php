@@ -389,6 +389,13 @@ class ImportEquinoxCardsCommand extends Command
             $enUsData['elements']['ECHO_EFFECT_KEYS'] = $effectKeys['ECHO_EFFECT'];
         }
 
+        // Extract per-locale effect display texts so CardGroupBuilder can set
+        // CardGroupTranslation.mainEffect / echoEffect for every locale.
+        // Without this, fr/de/es/it locales keep a stale or null mainEffect after an Equinox update.
+        // en-us is NOT overridden: data['elements']['MAIN_EFFECT'] already holds the canonical
+        // pre-formatted en text produced by Equinox (correct order + punctuation).
+        $effectTexts = $this->extractEffectTextsPerLocale($data['cardElements'] ?? []);
+
         // Equinox loreEntries carry all locale texts inline under `translations`.
         // Normalize to per-locale format that CardGroupBuilder.buildLoreEntries() expects.
         $lorePerLocale = $this->normalizeLoreEntriesForLocales($data['loreEntries'] ?? []);
@@ -415,16 +422,30 @@ class ImportEquinoxCardsCommand extends Command
                 $payload = array_merge($payload, $frFrExtras);
             }
 
+            if (isset($effectTexts['MAIN_EFFECT'][$locale])) {
+                $payload['elements']['MAIN_EFFECT'] = $effectTexts['MAIN_EFFECT'][$locale];
+            }
+            if (isset($effectTexts['ECHO_EFFECT'][$locale])) {
+                $payload['elements']['ECHO_EFFECT'] = $effectTexts['ECHO_EFFECT'][$locale];
+            }
+
             $payloads[$locale] = $payload;
         }
 
         // Ensure fr-fr is always present (uses root data as fallback when absent from translations)
         if (!isset($payloads['fr-fr'])) {
-            $payloads['fr-fr'] = array_merge(
+            $frFrPayload = array_merge(
                 $basePayload,
                 ['name' => $data['name'] ?? null, 'loreEntries' => $lorePerLocale['fr-fr'] ?? []],
                 $frFrExtras,
             );
+            if (isset($effectTexts['MAIN_EFFECT']['fr-fr'])) {
+                $frFrPayload['elements']['MAIN_EFFECT'] = $effectTexts['MAIN_EFFECT']['fr-fr'];
+            }
+            if (isset($effectTexts['ECHO_EFFECT']['fr-fr'])) {
+                $frFrPayload['elements']['ECHO_EFFECT'] = $effectTexts['ECHO_EFFECT']['fr-fr'];
+            }
+            $payloads['fr-fr'] = $frFrPayload;
         }
 
         return $payloads;
@@ -454,6 +475,81 @@ class ImportEquinoxCardsCommand extends Command
                         ],
                     ] : [],
                 ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Extracts MAIN_EFFECT and ECHO_EFFECT display texts per locale from Equinox cardElements.
+     *
+     * Elements are collected BY TYPE (trigger / condition / output) and reassembled in
+     * trigger → condition → output order — matching the order used in data['elements']['MAIN_EFFECT']
+     * for en-us.  Trailing punctuation (—, :, …) is intentionally preserved so that joining
+     * with a space produces the same readable compound sentence as the canonical en string.
+     *
+     * Slots (one per cardEffectDisplay) are joined with double space, matching the split used
+     * by CardGroupBuilder (explode('  ', ...)).
+     *
+     * Cards that carry no inline translations (e.g. UNIQUE variants referencing shared effects)
+     * produce no entry — CardGroupBuilder then leaves translation.mainEffect unchanged.
+     *
+     * @return array<string, array<string, string>> effectType → locale (en-us, fr-fr, …) → text
+     */
+    private function extractEffectTextsPerLocale(array $cardElements): array
+    {
+        $result = [];
+
+        foreach ($cardElements as $cardElement) {
+            $type = $cardElement['cardElementType']['reference'] ?? null;
+            if (!in_array($type, ['MAIN_EFFECT', 'ECHO_EFFECT'], true)) {
+                continue;
+            }
+
+            $displays = $cardElement['cardEffectDisplays'] ?? [];
+            usort($displays, static fn($a, $b) => ($a['sequence'] ?? 0) <=> ($b['sequence'] ?? 0));
+
+            $slotTexts = []; // dashLocale → list of per-slot texts
+
+            foreach ($displays as $display) {
+                $cardEffect = $display['cardEffect'] ?? null;
+                if (!$cardEffect) {
+                    continue;
+                }
+
+                // Collect texts keyed by element type so we can reorder them correctly.
+                $byType = []; // dashLocale → ['trigger' => text, 'condition' => text, 'output' => text]
+
+                foreach ($cardEffect['cardEffectElements'] ?? [] as $el) {
+                    $elType = strtolower($el['type'] ?? '');
+                    foreach (self::LOCALE_MAP as $apiLocale => $dashLocale) {
+                        $text = $el['translations'][$apiLocale]['text'] ?? null;
+                        if ($text === null || trim($text) === '') {
+                            continue;
+                        }
+                        // Last value for a given type wins (shouldn't happen in practice).
+                        $byType[$dashLocale][$elType] = $text;
+                    }
+                }
+
+                // Reassemble in trigger → condition → output order.
+                // This mirrors the ordering Equinox uses in data['elements']['MAIN_EFFECT'] for en-us,
+                // so the resulting fr/de/… text reads in the same natural sentence structure.
+                foreach ($byType as $dashLocale => $types) {
+                    $ordered = array_filter([
+                        $types['trigger']   ?? null,
+                        $types['condition'] ?? null,
+                        $types['output']    ?? null,
+                    ]);
+                    if (!empty($ordered)) {
+                        $slotTexts[$dashLocale][] = implode(' ', $ordered);
+                    }
+                }
+            }
+
+            foreach ($slotTexts as $dashLocale => $slots) {
+                $result[$type][$dashLocale] = implode('  ', $slots);
             }
         }
 

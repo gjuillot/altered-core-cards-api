@@ -33,11 +33,11 @@ final class CardSearchUpdater
             COALESCE(
                 (SELECT array_agg(DISTINCT kw)
                  FROM (
-                     SELECT jsonb_array_elements(COALESCE(me1.keywords, '[]')::jsonb)->>'k' AS kw
+                     SELECT jsonb_array_elements(CASE WHEN me1.keywords IS NULL OR me1.keywords::text = 'null' THEN '[]' ELSE me1.keywords::text END::jsonb)->>'k' AS kw
                      UNION ALL
-                     SELECT jsonb_array_elements(COALESCE(me2.keywords, '[]')::jsonb)->>'k' AS kw
+                     SELECT jsonb_array_elements(CASE WHEN me2.keywords IS NULL OR me2.keywords::text = 'null' THEN '[]' ELSE me2.keywords::text END::jsonb)->>'k' AS kw
                      UNION ALL
-                     SELECT jsonb_array_elements(COALESCE(me3.keywords, '[]')::jsonb)->>'k' AS kw
+                     SELECT jsonb_array_elements(CASE WHEN me3.keywords IS NULL OR me3.keywords::text = 'null' THEN '[]' ELSE me3.keywords::text END::jsonb)->>'k' AS kw
                  ) kws
                  WHERE kw IS NOT NULL
                 ),
