@@ -34,6 +34,10 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ORM\Index(name: "idx_card_card_group_set", fields: ["cardGroup", "set"])]
 #[ORM\Index(name: "idx_card_is_serialized", fields: ["isSerialized"])]
 #[ORM\Index(name: "idx_card_collector_number", fields: ["collectorNumberFormatedId"])]
+#[ORM\Index(name: "idx_card_set_collector_number", fields: ["set", "collectorNumberFormatedId"])]
+#[ORM\Index(name: "idx_card_rarity_set_collector", fields: ["rarity", "set", "collectorNumberFormatedId"])]
+#[ORM\Index(name: "idx_card_set_date_collector", fields: ["setDate", "collectorNumberFormatedId"])]
+#[ORM\Index(name: "idx_card_rarity_set_date_collector", fields: ["rarity", "setDate", "collectorNumberFormatedId"])]
 #[ORM\Entity(repositoryClass: CardRepository::class)]
 #[Gedmo\TranslationEntity(class: CardTranslation::class)]
 #[ApiResource(
@@ -77,7 +81,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     'mainCost', 'recallCost', 'oceanPower', 'mountainPower', 'forestPower',
 ])]
 #[ApiFilter(\App\Filter\CardNameFilter::class, properties: ['name'])]
-#[ApiFilter(OrderFilter::class, properties: ['cardNumber', 'collectorNumberFormatedId', 'set.date', 'random'])]
+#[ApiFilter(OrderFilter::class, properties: ['cardNumber', 'collectorNumberFormatedId', 'setDate', 'set.date', 'random'])]
 #[ApiFilter(\App\Filter\CardGroupOrderFilter::class, properties: ['mainCost', 'recallCost', 'oceanPower', 'mountainPower', 'forestPower'])]
 #[ApiFilter(\App\Filter\RandomCardFilter::class)]
 #[ApiFilter(\App\Filter\EffectTriggerTypeFilter::class, properties: ['effectTriggerType' => 'cardGroup'])]
@@ -169,6 +173,9 @@ class Card implements TimestampInterface
     #[ORM\Column(length: 20, nullable: true)]
     #[Groups(['card:list', 'card:read'])]
     private ?string $cardProduct = null;
+
+    #[ORM\Column(type: 'date', nullable: true)]
+    private ?\DateTimeImmutable $setDate = null;
 
     /**
      * Printing variant: standard | alt-art | promo | kickstarter | serialized
@@ -299,6 +306,9 @@ class Card implements TimestampInterface
     public function getVariation(): ?string { return $this->variation; }
     public function setVariation(?string $variation): self { $this->variation = $variation; return $this; }
 
+    public function getSetDate(): ?\DateTimeImmutable { return $this->setDate; }
+    public function setSetDate(?\DateTimeImmutable $setDate): self { $this->setDate = $setDate; return $this; }
+
     public function getCardGroup(): ?CardGroup { return $this->cardGroup; }
     public function setCardGroup(?CardGroup $cardGroup): self { $this->cardGroup = $cardGroup; return $this; }
 
@@ -306,7 +316,12 @@ class Card implements TimestampInterface
     public function setRarity(?Rarity $rarity): self { $this->rarity = $rarity; return $this; }
 
     public function getSet(): ?Set { return $this->set; }
-    public function setSet(?Set $set): self { $this->set = $set; return $this; }
+    public function setSet(?Set $set): self
+    {
+        $this->set = $set;
+        $this->setDate = $set?->getDate();
+        return $this;
+    }
 
     public function getParentCard(): ?Card { return $this->parentCard; }
     public function setParentCard(?Card $parentCard): self { $this->parentCard = $parentCard; return $this; }
