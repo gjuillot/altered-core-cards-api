@@ -28,6 +28,7 @@ final class MeilisearchIndexCommand extends Command
     {
         $this->addOption('configure', null, InputOption::VALUE_NONE, 'Configure index settings before indexing');
         $this->addOption('clear', null, InputOption::VALUE_NONE, 'Delete all documents before re-indexing');
+        $this->addOption('fields', null, InputOption::VALUE_REQUIRED, 'Comma-separated fields for partial update (e.g. set_date,collector_number_formated_id)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -45,6 +46,14 @@ final class MeilisearchIndexCommand extends Command
             $this->meilisearch->getIndex()->deleteAllDocuments();
         }
 
+        $fields       = $input->getOption('fields');
+        $partialFields = $fields ? array_map('trim', explode(',', $fields)) : null;
+        $isPartial     = $partialFields !== null;
+
+        if ($isPartial) {
+            $io->text(sprintf('Partial update — fields: %s', implode(', ', $partialFields)));
+        }
+
         $total = $this->cardDocumentRepository->countAll();
         $io->text(sprintf('Streaming %d cards…', $total));
 
@@ -52,8 +61,12 @@ final class MeilisearchIndexCommand extends Command
         $progressBar->setFormat(' %current%/%max% [%bar%] %percent:3s%% — %elapsed:6s%/%estimated:-6s%');
         $progressBar->start();
 
-        $indexed = 0;
-        foreach ($this->cardDocumentRepository->streamDocuments() as $batch) {
+        $indexed  = 0;
+        $stream   = $isPartial
+            ? $this->cardDocumentRepository->streamPartialDocuments($partialFields)
+            : $this->cardDocumentRepository->streamDocuments();
+
+        foreach ($stream as $batch) {
             $json = json_encode($batch, JSON_INVALID_UTF8_IGNORE);
 
             if ($json === false) {
@@ -63,9 +76,10 @@ final class MeilisearchIndexCommand extends Command
             }
 
             try {
-                $this->meilisearch->getIndex()->addDocumentsJson($json);
+                $isPartial
+                    ? $this->meilisearch->getIndex()->updateDocumentsJson($json)
+                    : $this->meilisearch->getIndex()->addDocumentsJson($json);
             } catch (\Throwable $e) {
-                // One document in this batch is malformed — send them one by one to identify it.
                 $progressBar->clear();
                 foreach ($batch as $doc) {
                     $docJson = json_encode($doc, JSON_INVALID_UTF8_IGNORE);
@@ -74,7 +88,9 @@ final class MeilisearchIndexCommand extends Command
                         continue;
                     }
                     try {
-                        $this->meilisearch->getIndex()->addDocumentsJson($docJson);
+                        $isPartial
+                            ? $this->meilisearch->getIndex()->updateDocumentsJson($docJson)
+                            : $this->meilisearch->getIndex()->addDocumentsJson($docJson);
                     } catch (\Throwable $inner) {
                         $io->warning(sprintf(
                             'Card ID %d skipped — Meilisearch rejected it: %s',

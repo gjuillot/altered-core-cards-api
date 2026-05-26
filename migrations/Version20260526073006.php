@@ -24,16 +24,25 @@ final class Version20260526073006 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE card ADD set_date DATE DEFAULT NULL');
-        $this->addSql('UPDATE card c SET set_date = cs.date FROM card_set cs WHERE c.set_id = cs.id');
+        // Column may already exist if added manually — skip if so.
+        $this->addSql("
+            DO \$\$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'card' AND column_name = 'set_date'
+                ) THEN
+                    ALTER TABLE card ADD set_date DATE DEFAULT NULL;
+                END IF;
+            END \$\$
+        ");
+        $this->addSql('UPDATE card c SET set_date = cs.date::date FROM card_set cs WHERE c.set_id = cs.id AND c.set_date IS NULL');
         $this->addSql('CREATE INDEX CONCURRENTLY idx_card_set_date_collector ON card (set_date, collector_number_formated_id)');
         $this->addSql('CREATE INDEX CONCURRENTLY idx_card_rarity_set_date_collector ON card (rarity_id, set_date, collector_number_formated_id)');
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('DROP INDEX CONCURRENTLY idx_card_set_date_collector');
-        $this->addSql('DROP INDEX CONCURRENTLY idx_card_rarity_set_date_collector');
-        $this->addSql('ALTER TABLE card DROP set_date');
+        $this->addSql('DROP INDEX CONCURRENTLY IF EXISTS idx_card_set_date_collector');
+        $this->addSql('DROP INDEX CONCURRENTLY IF EXISTS idx_card_rarity_set_date_collector');
     }
 }

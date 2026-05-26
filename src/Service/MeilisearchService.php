@@ -26,6 +26,16 @@ final class MeilisearchService
     ];
 
     /**
+     * Sortable fields.
+     */
+    private const SORTABLE_ATTRIBUTES = [
+        'set_date',
+        'collector_number_formated_id',
+        'main_cost',
+        'recall_cost',
+    ];
+
+    /**
      * Filterable fields (equality / range filters).
      */
     private const FILTERABLE_ATTRIBUTES = [
@@ -73,9 +83,10 @@ final class MeilisearchService
         $index = $this->getIndex();
         $index->updateSearchableAttributes(self::SEARCHABLE_ATTRIBUTES);
         $index->updateFilterableAttributes(self::FILTERABLE_ATTRIBUTES);
+        $index->updateSortableAttributes(self::SORTABLE_ATTRIBUTES);
         // Default maxTotalHits is 1000 — raise it so searches over large name groups
         // (e.g. 1800+ serialized variants of the same card) return all matching IDs.
-        $index->updatePagination(['maxTotalHits' => 200000]);
+        $index->updatePagination(['maxTotalHits' => 6000000]);
     }
 
     /**
@@ -108,7 +119,12 @@ final class MeilisearchService
      * @param string[] $attributesToSearchOn  Restrict search to specific fields (e.g. locale-specific)
      * @return int[]
      */
-    public function searchIds(string $query = '', array $attributesToSearchOn = [], ?string $filter = null, int $limit = 10000, int $offset = 0): array
+    /**
+     * @param string[] $attributesToSearchOn
+     * @param string[] $sort  e.g. ['set_date:desc', 'collector_number_formated_id:asc']
+     * @return int[]
+     */
+    public function searchIds(string $query = '', array $attributesToSearchOn = [], ?string $filter = null, int $limit = 10000, int $offset = 0, array $sort = []): array
     {
         $params = [
             'limit'                => $limit,
@@ -125,6 +141,10 @@ final class MeilisearchService
 
         if ($filter !== null) {
             $params['filter'] = $filter;
+        }
+
+        if (!empty($sort)) {
+            $params['sort'] = $sort;
         }
 
         $results = $this->getIndex()->search($query ?: null, $params);
