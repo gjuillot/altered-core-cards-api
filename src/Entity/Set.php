@@ -67,7 +67,7 @@ class Set implements TimestampInterface
 
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['set:read'])]
-    private ?DateTimeImmutable $date;
+    private ?DateTimeImmutable $date = null;
 
     #[ORM\Column(type: "json", nullable: true)]
     private array $cardGoogleSheets = [];
