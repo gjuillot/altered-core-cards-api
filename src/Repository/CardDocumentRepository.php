@@ -13,6 +13,33 @@ final class CardDocumentRepository
     public function __construct(private readonly Connection $connection) {}
 
     /**
+     * Stream only specific card columns — no JOINs, no GROUP BY, no temp files.
+     * Use for partial Meilisearch updates when only a few fields changed.
+     *
+     * @param string[] $fields  Column names on the card table (e.g. ['set_date', 'collector_number_formated_id'])
+     * @return \Generator<int, array<int, array<string, mixed>>>
+     */
+    public function streamPartialDocuments(array $fields, int $batchSize = 2000): \Generator
+    {
+        $cols   = implode(', ', array_map(fn($f) => "c.$f AS $f", $fields));
+        $result = $this->connection->executeQuery("SELECT c.id, $cols FROM card c ORDER BY c.id");
+
+        $batch = [];
+        while (($row = $result->fetchAssociative()) !== false) {
+            $batch[] = ['id' => (int) $row['id']] + array_intersect_key($row, array_flip($fields));
+
+            if (count($batch) >= $batchSize) {
+                yield $batch;
+                $batch = [];
+            }
+        }
+
+        if (!empty($batch)) {
+            yield $batch;
+        }
+    }
+
+    /**
      * Stream all card documents as flat arrays, batched for memory efficiency.
      *
      * @return \Generator<int, array<int, array<string, mixed>>>
@@ -96,6 +123,8 @@ final class CardDocumentRepository
                 c.promo,
                 c.is_serialized,
                 c.variation,
+                c.collector_number_formated_id,
+                COALESCE(c.set_date, cs.date::date)                                   AS set_date,
                 cs.reference                                                          AS set_reference,
                 cg.main_cost,
                 cg.recall_cost,
@@ -130,7 +159,8 @@ final class CardDocumentRepository
             $where
             GROUP BY
                 c.id, c.reference, c.kickstarter, c.promo, c.is_serialized, c.variation,
-                cs.reference,
+                c.collector_number_formated_id, c.set_date,
+                cs.reference, cs.date,
                 cg.main_cost, cg.recall_cost, cg.ocean_power, cg.mountain_power, cg.forest_power,
                 cg.is_banned, cg.is_suspended, cg.is_errated,
                 f.code, r.reference, ct.reference
@@ -169,7 +199,9 @@ final class CardDocumentRepository
             'is_serialized'  => (bool) $row['is_serialized'],
             'kickstarter'    => (bool) $row['kickstarter'],
             'promo'          => (bool) $row['promo'],
-            'variation'      => $row['variation'],
+            'variation'                    => $row['variation'],
+            'collector_number_formated_id' => $row['collector_number_formated_id'],
+            'set_date'                     => $row['set_date'],
         ];
     }
 }

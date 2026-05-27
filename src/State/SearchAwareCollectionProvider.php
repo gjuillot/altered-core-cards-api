@@ -4,7 +4,11 @@ namespace App\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
+use App\Repository\FilteredCardCountRepository;
+use App\Service\FilterCacheKeyService;
 use App\Service\MeilisearchService;
+use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Wraps CardCollectionProvider and resolves the total item count via Meilisearch
@@ -39,37 +43,86 @@ final class SearchAwareCollectionProvider implements ProviderInterface
         'isBanned'      => 'is_banned',
         'isSuspended'   => 'is_suspended',
         'isErrated'     => 'is_errated',
+        'variation'     => 'variation',
+    ];
+
+    /** API Platform order key → Meilisearch sortable attribute */
+    private const ORDER_MAP = [
+        'set.date'                   => 'set_date',
+        'setDate'                    => 'set_date',
+        'collectorNumberFormatedId'  => 'collector_number_formated_id',
+        'mainCost'                   => 'main_cost',
+        'recallCost'                 => 'recall_cost',
     ];
 
     public function __construct(
         private readonly CardCollectionProvider $inner,
         private readonly MeilisearchService $meilisearch,
+        private readonly FilterCacheKeyService $cacheKeyService,
+        #[Autowire(service: 'cache.card_counts')]
+        private readonly CacheItemPoolInterface $cachePool,
+        private readonly FilteredCardCountRepository $filteredCountRepo,
     ) {}
 
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): object|array|null
     {
-        $filters   = $context['filters'] ?? [];
-        $nameQuery = $this->extractNameQuery($filters);
+        $filters      = $context['filters'] ?? [];
+        $nameQuery    = $this->extractNameQuery($filters);
+        $meiliFilter  = $this->buildFilter($filters);
+        $hasFilters   = $meiliFilter !== null;
 
-        if ($nameQuery === null) {
+        // Only go through Meilisearch when there's something to filter or search.
+        if ($nameQuery === null && !$hasFilters) {
             return $this->inner->provide($operation, $uriVariables, $context);
         }
 
-        $meiliFilter  = $this->buildFilter($filters);
         $attrs        = $this->buildAttributesToSearchOn($filters);
+        $sort         = $this->buildSort($filters);
         $page         = max(1, (int) ($filters['page'] ?? 1));
         $itemsPerPage = min(max(1, (int) ($filters['itemsPerPage'] ?? 30)), 1000);
         $offset       = ($page - 1) * $itemsPerPage;
+        $query        = $nameQuery ?? '';
 
-        $total = $this->fetchTotal($nameQuery, $meiliFilter, $attrs);
-        if ($total !== null) {
-            $context['_meili_total'] = $total;
-        }
-
-        $ids = $this->fetchIds($nameQuery, $meiliFilter, $attrs, $itemsPerPage, $offset);
+        $ids = $this->fetchIds($query, $meiliFilter, $attrs, $itemsPerPage, $offset, $sort);
         if ($ids !== null) {
             $context['_meili_ids']      = $ids;
-            $context['filters']['page'] = 1; // Meilisearch already applied pagination; Doctrine fetches at OFFSET 0
+            $context['filters']['page'] = 1; // Meilisearch already paginated; Doctrine fetches at OFFSET 0
+
+            // Accurate total: Redis-cached DB count for structural filters.
+            // Name-search queries use Meilisearch estimate (too varied to cache per-combination).
+            if ($nameQuery === null) {
+                $cacheKey  = $this->cacheKeyService->make($operation->getClass() ?? '', $filters);
+                $cacheItem = $this->cachePool->getItem($cacheKey);
+                if ($cacheItem->isHit()) {
+                    $context['_meili_total'] = (float) $cacheItem->get();
+                } else {
+                    try {
+                        // Slow on first request for this filter combination, cached indefinitely after.
+                        $count = $this->filteredCountRepo->count($filters);
+                        $cacheItem->set((float) $count)->expiresAfter(null);
+                        $this->cachePool->save($cacheItem);
+                        $context['_meili_total'] = (float) $count;
+                    } catch (\Throwable) {
+                        $total = $this->fetchTotal($query, $meiliFilter, $attrs);
+                        if ($total !== null) {
+                            $context['_meili_total'] = $total;
+                        }
+                    }
+                }
+            } else {
+                $total = $this->fetchTotal($query, $meiliFilter, $attrs);
+                if ($total !== null) {
+                    $context['_meili_total'] = $total;
+                }
+            }
+
+            // Strip filters that Meilisearch already handled so Doctrine doesn't
+            // generate unnecessary JOINs (card_group → faction → card_type etc.).
+            // Keep order[...] so the OrderFilter still applies the ORDER BY.
+            foreach (array_keys(self::FILTER_MAP) as $filterKey) {
+                unset($context['filters'][$filterKey]);
+            }
+            unset($context['filters']['name']);
         }
 
         return $this->inner->provide($operation, $uriVariables, $context);
@@ -93,10 +146,10 @@ final class SearchAwareCollectionProvider implements ProviderInterface
     }
 
     /** Returns null when Meilisearch is unavailable (triggers LIKE fallback in CardNameFilter). */
-    private function fetchIds(string $query, ?string $filter, array $attributesToSearchOn, int $limit = 30, int $offset = 0): ?array
+    private function fetchIds(string $query, ?string $filter, array $attributesToSearchOn, int $limit = 30, int $offset = 0, array $sort = []): ?array
     {
         try {
-            return $this->meilisearch->searchIds($query, $attributesToSearchOn, $filter, $limit, $offset);
+            return $this->meilisearch->searchIds($query, $attributesToSearchOn, $filter, $limit, $offset, $sort);
         } catch (\Throwable) {
             return null;
         }
@@ -116,10 +169,36 @@ final class SearchAwareCollectionProvider implements ProviderInterface
                 $params['attributesToSearchOn'] = $attributesToSearchOn;
             }
 
-            return $this->meilisearch->getIndex()->search($query, $params)->getEstimatedTotalHits() ?? 0;
+            return $this->meilisearch->getIndex()->search($query ?: null, $params)->getEstimatedTotalHits() ?? 0;
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Map API Platform order[...] params to Meilisearch sort syntax.
+     * e.g. order[set.date]=desc → ['set_date:desc']
+     *
+     * @return string[]
+     */
+    private function buildSort(array $filters): array
+    {
+        $order = $filters['order'] ?? [];
+        if (!is_array($order)) {
+            return [];
+        }
+
+        $sort = [];
+        foreach ($order as $field => $direction) {
+            $meiliField = self::ORDER_MAP[$field] ?? null;
+            if ($meiliField === null) {
+                continue;
+            }
+            $dir    = strtolower((string) $direction) === 'desc' ? 'desc' : 'asc';
+            $sort[] = "$meiliField:$dir";
+        }
+
+        return $sort;
     }
 
     /**

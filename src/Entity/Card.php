@@ -174,7 +174,7 @@ class Card implements TimestampInterface
     #[Groups(['card:list', 'card:read'])]
     private ?string $cardProduct = null;
 
-    #[ORM\Column(type: 'date', nullable: true)]
+    #[ORM\Column(type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $setDate = null;
 
     /**
