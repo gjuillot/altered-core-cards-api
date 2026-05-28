@@ -29,6 +29,7 @@ query:
     effect_slots: "Effect slots"
     effect_presence: "Effect presence"
     same_trigger: "Same triggers (min)"
+    cost_relation: "Cost management"
     keywords: Keywords
     banned: Banned
     suspended: Suspended
@@ -56,6 +57,9 @@ query:
     no_effect: "Has no effect"
     min_2_same: "≥ 2 identical"
     all_3_same: "3 identical (all)"
+    cost_equal: "Main Cost = Recall Cost"
+    cost_main_higher: "Main Cost > Recall Cost"
+    cost_recall_higher: "Recall Cost > Main Cost"
     or: OR
     and: AND
   button:
