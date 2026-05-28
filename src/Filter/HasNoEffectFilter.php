@@ -86,7 +86,7 @@ final class HasNoEffectFilter extends AbstractFilter
     {
         $root = $qb->getRootAliases()[0];
         $qb->andWhere(
-            "$root.id IN (SELECT IDENTITY(cs.cardId) FROM " . CardSearch::class . " cs WHERE cs.hasEffect = :csHasEffect)"
+            "EXISTS (SELECT cs FROM " . CardSearch::class . " cs WHERE cs.cardId = $root.id AND cs.hasEffect = :csHasEffect)"
         );
         $qb->setParameter('csHasEffect', !$noEffect);
         $this->profiler?->stop('hasNoEffect');

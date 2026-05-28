@@ -104,7 +104,7 @@ final class SameTriggerCountFilter extends AbstractFilter
 
         $root = $qb->getRootAliases()[0];
         $qb->andWhere(
-            "$root.id IN (SELECT IDENTITY(cs.cardId) FROM " . CardSearch::class . " cs WHERE $dqlCondition)"
+            "EXISTS (SELECT cs FROM " . CardSearch::class . " cs WHERE cs.cardId = $root.id AND ($dqlCondition))"
         );
         $this->profiler?->stop('sameTrigger');
     }
