@@ -573,13 +573,13 @@
     // ── Trigger / condition data (server-rendered) ──────────────────────────
     const TRIGGERS = [
         {% for t in triggers %}
-        { id: {{ t.id }}, label: {{ (t.textFr ?? t.textEn ?? t.id ~ '')|json_encode(constant('JSON_HEX_TAG'))|raw }} },
+        { id: {{ t.alteredId }}, label: {{ (t.textFr ?? t.textEn ?? t.alteredId ~ '')|json_encode(constant('JSON_HEX_TAG'))|raw }} },
         {% endfor %}
     ];
 
     const CONDITIONS = [
         {% for c in conditions %}
-        { id: {{ c.id }}, label: {{ (c.textFr ?? c.textEn ?? c.id ~ '')|json_encode(constant('JSON_HEX_TAG'))|raw }} },
+        { id: {{ c.alteredId }}, label: {{ (c.textFr ?? c.textEn ?? c.alteredId ~ '')|json_encode(constant('JSON_HEX_TAG'))|raw }} },
         {% endfor %}
     ];
 
@@ -710,7 +710,7 @@
                     div.title = label;
                     div.addEventListener('click', () => {
                         const short = label.length > 70 ? label.substring(0, 70) + '…' : label;
-                        effectSlots[idx].effect      = item.id;
+                        effectSlots[idx].effect      = item.alteredId;
                         effectSlots[idx].effectLabel = short;
                         searchInput.value    = short;
                         searchInput.readOnly = true;

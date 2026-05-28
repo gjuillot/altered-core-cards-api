@@ -41,7 +41,7 @@ final class EffectTriggerTypeFilter extends AbstractFilter
             return;
         }
 
-        $triggerId = (int) $value;
+        $triggerId = $this->resolveAlteredId('ability_trigger', (int) $value);
         if ($triggerId <= 0) {
             return;
         }
@@ -97,7 +97,7 @@ final class EffectTriggerTypeFilter extends AbstractFilter
                 'property'    => 'effectTriggerType',
                 'type'        => 'int',
                 'required'    => false,
-                'description' => 'Filter by ability_trigger id on any of the three effect slots',
+                'description' => 'Filter by ability_trigger alteredId on any of the three effect slots',
             ],
         ];
     }
