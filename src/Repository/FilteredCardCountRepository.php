@@ -57,6 +57,20 @@ final class FilteredCardCountRepository
             }
 
             $p = 'p' . $i++;
+
+            // Range operators: mainCost[lte]=5 arrives as ['lte' => '5']
+            if (!array_is_list($raw) && is_array($raw)) {
+                static $rangeOps = ['lt' => '<', 'lte' => '<=', 'gt' => '>', 'gte' => '>='];
+                foreach ($raw as $op => $val) {
+                    $sqlOp = $rangeOps[$op] ?? null;
+                    if ($sqlOp !== null && $val !== '' && $val !== null) {
+                        $qb->andWhere("$alias.$col $sqlOp :$p")->setParameter($p, $val);
+                        $p = 'p' . $i++;
+                    }
+                }
+                continue;
+            }
+
             if (count($values) === 1) {
                 $qb->andWhere("$alias.$col = :$p")->setParameter($p, $values[0]);
             } else {

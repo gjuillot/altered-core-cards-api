@@ -240,6 +240,18 @@ final class SearchAwareCollectionProvider implements ProviderInterface
                 continue;
             }
 
+            // Range operators: mainCost[lte]=5 arrives as ['lte' => '5']
+            if (is_array($value) && !array_is_list($value)) {
+                static $rangeOps = ['lt' => '<', 'lte' => '<=', 'gt' => '>', 'gte' => '>='];
+                foreach ($value as $op => $val) {
+                    $mOp = $rangeOps[$op] ?? null;
+                    if ($mOp !== null && $val !== '' && $val !== null) {
+                        $parts[] = sprintf('%s %s %s', $field, $mOp, $this->meiliValue($field, (string) $val));
+                    }
+                }
+                continue;
+            }
+
             $values = array_values(array_filter((array) $value, fn($v) => $v !== '' && $v !== null));
 
             if (empty($values)) {
@@ -247,13 +259,27 @@ final class SearchAwareCollectionProvider implements ProviderInterface
             }
 
             if (count($values) === 1) {
-                $parts[] = sprintf('%s = "%s"', $field, addslashes((string) $values[0]));
+                $parts[] = sprintf('%s = %s', $field, $this->meiliValue($field, (string) $values[0]));
             } else {
-                $quoted  = array_map(fn($v) => sprintf('"%s"', addslashes((string) $v)), $values);
+                $quoted  = array_map(fn($v) => $this->meiliValue($field, (string) $v), $values);
                 $parts[] = sprintf('%s IN [%s]', $field, implode(', ', $quoted));
             }
         }
 
         return !empty($parts) ? implode(' AND ', $parts) : null;
+    }
+
+    private function meiliValue(string $field, string $value): string
+    {
+        static $numeric = ['main_cost', 'recall_cost', 'ocean_power', 'mountain_power', 'forest_power'];
+        static $bool    = ['is_serialized', 'is_banned', 'is_suspended', 'is_errated', 'promo', 'kickstarter'];
+
+        if (in_array($field, $numeric, true) && is_numeric($value)) {
+            return $value;
+        }
+        if (in_array($field, $bool, true)) {
+            return in_array(strtolower($value), ['true', '1'], true) ? 'true' : 'false';
+        }
+        return sprintf('"%s"', addslashes($value));
     }
 }
