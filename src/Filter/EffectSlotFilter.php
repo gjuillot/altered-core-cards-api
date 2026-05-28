@@ -84,9 +84,9 @@ final class EffectSlotFilter extends AbstractFilter
             $slotExprs = [];
             foreach ([1, 2, 3] as $s) {
                 $parts = [];
-                if ($trigger > 0)   $parts[] = "t$s = $trigger";
-                if ($condition > 0) $parts[] = "c$s = $condition";
-                if ($effect > 0)    $parts[] = "e$s = $effect";
+                if ($trigger > 0)   $parts[] = "cs.t$s = $trigger";
+                if ($condition > 0) $parts[] = "cs.c$s = $condition";
+                if ($effect > 0)    $parts[] = "cs.e$s = $effect";
                 if ($parts) {
                     $slotExprs[] = '(' . implode(' AND ', $parts) . ')';
                 }
@@ -107,7 +107,7 @@ final class EffectSlotFilter extends AbstractFilter
         $dqlConditions = implode($glue, $criteriaExprs);
 
         $qb->andWhere(
-            "$root.id IN (SELECT IDENTITY(cs.cardId) FROM " . CardSearch::class . " cs WHERE $dqlConditions)"
+            "EXISTS (SELECT cs FROM " . CardSearch::class . " cs WHERE cs.cardId = $root.id AND ($dqlConditions))"
         );
         $this->profiler?->stop('effectSlot');
     }
