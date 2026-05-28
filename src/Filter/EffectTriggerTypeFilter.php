@@ -4,6 +4,7 @@ namespace App\Filter;
 
 use App\Debug\FilterProfiler;
 use App\Entity\Card;
+use App\Entity\CardSearch;
 use ApiPlatform\Doctrine\Orm\Filter\AbstractFilter;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
@@ -48,15 +49,11 @@ final class EffectTriggerTypeFilter extends AbstractFilter
 
         if ($resourceClass === Card::class) {
             $this->profiler?->start('trigger', 'card_search');
-            $conn = $this->managerRegistry->getManager()->getConnection();
-            $ids  = $conn->fetchFirstColumn(
-                'SELECT card_id FROM card_search WHERE t1 = :tid OR t2 = :tid OR t3 = :tid',
-                ['tid' => $triggerId],
-            ) ?: [0];
-
             $root = $queryBuilder->getRootAliases()[0];
-            $this->applyIdInClause($queryBuilder, $root, $ids);
-            $this->profiler?->stop('trigger', count($ids));
+            $queryBuilder->andWhere(
+                "$root.id IN (SELECT IDENTITY(cs.cardId) FROM " . CardSearch::class . " cs WHERE cs.t1 = $triggerId OR cs.t2 = $triggerId OR cs.t3 = $triggerId)"
+            );
+            $this->profiler?->stop('trigger');
             return;
         }
 
