@@ -63,14 +63,18 @@ final class EffectSlotFilter extends AbstractFilter
     {
         $criteriaExprs = [];
 
+        $triggerMap   = $this->resolveAlteredIds('ability_trigger',   array_column(array_filter($value, 'is_array'), 'trigger'));
+        $conditionMap = $this->resolveAlteredIds('ability_condition',  array_column(array_filter($value, 'is_array'), 'condition'));
+        $effectMap    = $this->resolveAlteredIds('ability_effect',     array_column(array_filter($value, 'is_array'), 'effect'));
+
         foreach ($value as $criteria) {
             if (!is_array($criteria)) {
                 continue;
             }
 
-            $trigger   = (int) ($criteria['trigger']   ?? 0);
-            $condition = (int) ($criteria['condition'] ?? 0);
-            $effect    = (int) ($criteria['effect']    ?? 0);
+            $trigger   = $triggerMap[(int)   ($criteria['trigger']   ?? 0)] ?? 0;
+            $condition = $conditionMap[(int) ($criteria['condition'] ?? 0)] ?? 0;
+            $effect    = $effectMap[(int)    ($criteria['effect']    ?? 0)] ?? 0;
 
             if ($trigger === 0 && $condition === 0 && $effect === 0) {
                 continue;
@@ -127,14 +131,18 @@ final class EffectSlotFilter extends AbstractFilter
 
         $criteriaExprs = [];
 
+        $triggerMap   = $this->resolveAlteredIds('ability_trigger',   array_column(array_filter($value, 'is_array'), 'trigger'));
+        $conditionMap = $this->resolveAlteredIds('ability_condition',  array_column(array_filter($value, 'is_array'), 'condition'));
+        $effectMap    = $this->resolveAlteredIds('ability_effect',     array_column(array_filter($value, 'is_array'), 'effect'));
+
         foreach ($value as $criteria) {
             if (!is_array($criteria)) {
                 continue;
             }
 
-            $trigger   = (int) ($criteria['trigger']   ?? 0);
-            $condition = (int) ($criteria['condition'] ?? 0);
-            $effect    = (int) ($criteria['effect']    ?? 0);
+            $trigger   = $triggerMap[(int)   ($criteria['trigger']   ?? 0)] ?? 0;
+            $condition = $conditionMap[(int) ($criteria['condition'] ?? 0)] ?? 0;
+            $effect    = $effectMap[(int)    ($criteria['effect']    ?? 0)] ?? 0;
 
             if ($trigger === 0 && $condition === 0 && $effect === 0) {
                 continue;
@@ -184,9 +192,9 @@ final class EffectSlotFilter extends AbstractFilter
     public function getDescription(string $resourceClass): array
     {
         return [
-            'effectSlot[N][trigger]'   => ['property' => 'effectSlot', 'type' => 'int', 'required' => false, 'description' => 'ability_trigger DB id (0 = any)'],
-            'effectSlot[N][condition]' => ['property' => 'effectSlot', 'type' => 'int', 'required' => false, 'description' => 'ability_condition DB id (0 = any)'],
-            'effectSlot[N][effect]'    => ['property' => 'effectSlot', 'type' => 'int', 'required' => false, 'description' => 'ability_effect DB id (0 = any)'],
+            'effectSlot[N][trigger]'   => ['property' => 'effectSlot', 'type' => 'int', 'required' => false, 'description' => 'ability_trigger alteredId (0 = any)'],
+            'effectSlot[N][condition]' => ['property' => 'effectSlot', 'type' => 'int', 'required' => false, 'description' => 'ability_condition alteredId (0 = any)'],
+            'effectSlot[N][effect]'    => ['property' => 'effectSlot', 'type' => 'int', 'required' => false, 'description' => 'ability_effect alteredId (0 = any)'],
             'effectSlotMode'           => ['property' => 'effectSlotMode', 'type' => 'string', 'required' => false, 'description' => 'or (default) | and'],
         ];
     }

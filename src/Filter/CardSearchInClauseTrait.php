@@ -23,4 +23,38 @@ trait CardSearchInClauseTrait
         $intIds = implode(',', array_map('intval', $ids));
         $qb->andWhere("$alias.id IN ($intIds)");
     }
+
+    private function resolveAlteredId(string $table, int $alteredId): int
+    {
+        if ($alteredId === 0) {
+            return 0;
+        }
+        $conn = $this->managerRegistry->getManager()->getConnection();
+        return (int) ($conn->fetchOne("SELECT id FROM $table WHERE altered_id = ?", [$alteredId]) ?: 0);
+    }
+
+    /**
+     * Batch-resolve multiple alteredIds for one table.
+     * Returns a map of [alteredId => internalId].
+     *
+     * @param  int[]  $alteredIds
+     * @return array<int,int>
+     */
+    private function resolveAlteredIds(string $table, array $alteredIds): array
+    {
+        $alteredIds = array_values(array_unique(array_filter(array_map('intval', $alteredIds))));
+        if (empty($alteredIds)) {
+            return [];
+        }
+        $placeholders = implode(',', $alteredIds);
+        $conn         = $this->managerRegistry->getManager()->getConnection();
+        $rows         = $conn->fetchAllNumeric(
+            "SELECT altered_id, id FROM $table WHERE altered_id IN ($placeholders)"
+        );
+        $map = [];
+        foreach ($rows as [$alteredId, $id]) {
+            $map[(int) $alteredId] = (int) $id;
+        }
+        return $map;
+    }
 }
