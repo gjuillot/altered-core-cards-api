@@ -88,6 +88,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\EffectKeywordFilter::class, properties: ['effectKeyword' => 'cardGroup'])]
 #[ApiFilter(\App\Filter\HasNoEffectFilter::class, properties: ['hasNoEffect' => 'cardGroup'])]
 #[ApiFilter(\App\Filter\SameTriggerCountFilter::class, properties: ['minSameTriggerCount' => 'cardGroup'])]
+#[ApiFilter(\App\Filter\CostRelationFilter::class, properties: ['costRelation' => 'cardGroup'])]
 #[ApiFilter(\App\Filter\EffectSlotFilter::class, properties: ['effectSlot'])]
 #[ApiFilter(\App\Filter\ArtistFilter::class)]
 #[ApiFilter(\App\Filter\BgaQueryFilter::class, properties: ['bga' => 'exact'])]

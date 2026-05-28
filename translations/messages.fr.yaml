@@ -48,6 +48,7 @@ query:
     effect_slots: "Slots d'effet"
     effect_presence: "Présence d'effets"
     same_trigger: "Triggers identiques (min)"
+    cost_relation: "Gestion des coûts"
     keywords: Keywords
     banned: Banni
     suspended: Suspendu
@@ -75,6 +76,9 @@ query:
     no_effect: "Sans aucun effet"
     min_2_same: "≥ 2 identiques"
     all_3_same: "3 identiques (tous)"
+    cost_equal: "Coût Main = Coût Rappel"
+    cost_main_higher: "Coût Main > Coût Rappel"
+    cost_recall_higher: "Coût Rappel > Coût Main"
     or: OU
     and: ET
   button:
