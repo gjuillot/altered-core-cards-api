@@ -4,6 +4,7 @@ namespace App\Filter;
 
 use App\Debug\FilterProfiler;
 use App\Entity\Card;
+use App\Entity\CardSearch;
 use ApiPlatform\Doctrine\Orm\Filter\AbstractFilter;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
@@ -94,22 +95,18 @@ final class SameTriggerCountFilter extends AbstractFilter
     private function filterViaCardSearch(int $minCount, QueryBuilder $qb): void
     {
         if ($minCount === 3) {
-            $sql = 'SELECT card_id FROM card_search
-                    WHERE t1 IS NOT NULL AND t2 IS NOT NULL AND t3 IS NOT NULL
-                      AND t1 = t2 AND t2 = t3';
+            $dqlCondition = 'cs.t1 IS NOT NULL AND cs.t2 IS NOT NULL AND cs.t3 IS NOT NULL AND cs.t1 = cs.t2 AND cs.t2 = cs.t3';
         } else {
-            $sql = 'SELECT card_id FROM card_search WHERE
-                    (t1 IS NOT NULL AND t2 IS NOT NULL AND t1 = t2)
-                    OR (t1 IS NOT NULL AND t3 IS NOT NULL AND t1 = t3)
-                    OR (t2 IS NOT NULL AND t3 IS NOT NULL AND t2 = t3)';
+            $dqlCondition = '(cs.t1 IS NOT NULL AND cs.t2 IS NOT NULL AND cs.t1 = cs.t2)
+                              OR (cs.t1 IS NOT NULL AND cs.t3 IS NOT NULL AND cs.t1 = cs.t3)
+                              OR (cs.t2 IS NOT NULL AND cs.t3 IS NOT NULL AND cs.t2 = cs.t3)';
         }
 
-        $conn = $this->managerRegistry->getManager()->getConnection();
-        $ids  = $conn->fetchFirstColumn($sql) ?: [0];
-
         $root = $qb->getRootAliases()[0];
-        $this->applyIdInClause($qb, $root, $ids);
-        $this->profiler?->stop('sameTrigger', count($ids));
+        $qb->andWhere(
+            "$root.id IN (SELECT IDENTITY(cs.cardId) FROM " . CardSearch::class . " cs WHERE $dqlCondition)"
+        );
+        $this->profiler?->stop('sameTrigger');
     }
 
     public function getDescription(string $resourceClass): array

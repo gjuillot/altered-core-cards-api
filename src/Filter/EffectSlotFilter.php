@@ -4,6 +4,7 @@ namespace App\Filter;
 
 use App\Debug\FilterProfiler;
 use App\Entity\Card;
+use App\Entity\CardSearch;
 use ApiPlatform\Doctrine\Orm\Filter\AbstractFilter;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
@@ -102,14 +103,13 @@ final class EffectSlotFilter extends AbstractFilter
         }
 
         $glue = $mode === 'and' ? ' AND ' : ' OR ';
-        $sql  = 'SELECT card_id FROM card_search WHERE ' . implode($glue, $criteriaExprs);
-
-        $conn = $this->managerRegistry->getManager()->getConnection();
-        $ids  = $conn->fetchFirstColumn($sql) ?: [0];
-
         $root = $qb->getRootAliases()[0];
-        $this->applyIdInClause($qb, $root, $ids);
-        $this->profiler?->stop('effectSlot', count($ids));
+        $dqlConditions = implode($glue, $criteriaExprs);
+
+        $qb->andWhere(
+            "$root.id IN (SELECT IDENTITY(cs.cardId) FROM " . CardSearch::class . " cs WHERE $dqlConditions)"
+        );
+        $this->profiler?->stop('effectSlot');
     }
 
     // ── Fallback path (CardGroup or other) ─────────────────────────────────

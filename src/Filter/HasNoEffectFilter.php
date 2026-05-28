@@ -4,6 +4,7 @@ namespace App\Filter;
 
 use App\Debug\FilterProfiler;
 use App\Entity\Card;
+use App\Entity\CardSearch;
 use ApiPlatform\Doctrine\Orm\Filter\AbstractFilter;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
@@ -83,16 +84,12 @@ final class HasNoEffectFilter extends AbstractFilter
 
     private function filterViaCardSearch(bool $noEffect, QueryBuilder $qb): void
     {
-        $sql  = $noEffect
-            ? 'SELECT card_id FROM card_search WHERE has_effect = FALSE'
-            : 'SELECT card_id FROM card_search WHERE has_effect = TRUE';
-
-        $conn = $this->managerRegistry->getManager()->getConnection();
-        $ids  = $conn->fetchFirstColumn($sql) ?: [0];
-
         $root = $qb->getRootAliases()[0];
-        $this->applyIdInClause($qb, $root, $ids);
-        $this->profiler?->stop('hasNoEffect', count($ids));
+        $qb->andWhere(
+            "$root.id IN (SELECT IDENTITY(cs.cardId) FROM " . CardSearch::class . " cs WHERE cs.hasEffect = :csHasEffect)"
+        );
+        $qb->setParameter('csHasEffect', !$noEffect);
+        $this->profiler?->stop('hasNoEffect');
     }
 
     public function getDescription(string $resourceClass): array
