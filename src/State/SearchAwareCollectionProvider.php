@@ -76,6 +76,14 @@ final class SearchAwareCollectionProvider implements ProviderInterface
             return $this->inner->provide($operation, $uriVariables, $context);
         }
 
+        // Doctrine-only filters (effectSlot, effectTriggerType, artist, etc.) can't be
+        // combined with Meilisearch pagination — Meilisearch would paginate on the full
+        // unfiltered set and Doctrine would apply the extra filter on each page batch,
+        // producing empty pages. Fall back to Doctrine entirely in that case.
+        if ($this->hasUnmappedFilters($filters)) {
+            return $this->inner->provide($operation, $uriVariables, $context);
+        }
+
         $attrs        = $this->buildAttributesToSearchOn($filters);
         $sort         = $this->buildSort($filters);
         $page         = max(1, (int) ($filters['page'] ?? 1));
@@ -223,6 +231,17 @@ final class SearchAwareCollectionProvider implements ProviderInterface
         }
 
         return $attrs;
+    }
+
+    private function hasUnmappedFilters(array $filters): bool
+    {
+        static $skip = ['name', 'page', 'itemsPerPage', 'pagination', 'order'];
+        foreach (array_keys($filters) as $key) {
+            if (!isset(self::FILTER_MAP[$key]) && !in_array($key, $skip, true)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function buildFilter(array $filters): ?string
