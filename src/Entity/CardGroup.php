@@ -69,6 +69,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(OrderFilter::class, properties: ['mainCost', 'recallCost'])]
 #[ApiFilter(\App\Filter\AfterIdFilter::class, properties: ['afterId'])]
 #[ApiFilter(\App\Filter\CostRelationFilter::class, properties: ['costRelation'])]
+#[ApiFilter(\App\Filter\CardGroupTransfugeFilter::class)]
 class CardGroup implements TimestampInterface
 {
     use TimestampTrait;

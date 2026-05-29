@@ -51,7 +51,7 @@ final class EffectTriggerTypeFilter extends AbstractFilter
             $this->profiler?->start('trigger', 'card_search');
             $root = $queryBuilder->getRootAliases()[0];
             $queryBuilder->andWhere(
-                "EXISTS (SELECT cs FROM " . CardSearch::class . " cs WHERE cs.cardId = $root.id AND (cs.t1 = $triggerId OR cs.t2 = $triggerId OR cs.t3 = $triggerId))"
+                "EXISTS (SELECT cs FROM " . CardSearch::class . " cs WHERE cs.cardId = $root.id AND (cs.t1 = $triggerId OR cs.t2 = $triggerId OR cs.t3 = $triggerId OR cs.et1 = $triggerId))"
             );
             $this->profiler?->stop('trigger');
             return;

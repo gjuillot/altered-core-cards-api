@@ -51,6 +51,15 @@ class CardSearch
     #[ORM\Column(nullable: true)]
     private ?int $e3 = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $et1 = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $ec1 = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $ee1 = null;
+
     #[ORM\Column(name: 'has_effect', options: ['default' => false])]
     private bool $hasEffect = false;
 
@@ -71,6 +80,9 @@ class CardSearch
     public function getT3(): ?int { return $this->t3; }
     public function getC3(): ?int { return $this->c3; }
     public function getE3(): ?int { return $this->e3; }
+    public function getEt1(): ?int { return $this->et1; }
+    public function getEc1(): ?int { return $this->ec1; }
+    public function getEe1(): ?int { return $this->ee1; }
     public function isHasEffect(): bool { return $this->hasEffect; }
     public function isPublic(): bool { return $this->isPublic; }
     public function getKeywords(): array { return $this->keywords; }
