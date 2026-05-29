@@ -55,6 +55,9 @@ security:
         - { path: ^/api/ability_conditions, roles: PUBLIC_ACCESS }
         - { path: ^/api/ability_effects, roles: PUBLIC_ACCESS }
         - { path: ^/api/keywords, roles: PUBLIC_ACCESS }
+        - { path: ^/api/triggers, roles: PUBLIC_ACCESS }
+        - { path: ^/api/conditions, roles: PUBLIC_ACCESS }
+        - { path: ^/api/effects, roles: PUBLIC_ACCESS }
         - { path: ^/query, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 
