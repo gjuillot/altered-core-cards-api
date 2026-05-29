@@ -454,9 +454,13 @@ class CardGroupBuilder
                         $parts = array_key_exists('MAIN_EFFECT', $elements)
                             ? array_values(array_filter(array_map('trim', explode('  ', $elements['MAIN_EFFECT']))))
                             : [];
+                        // When keys are available their count is authoritative — the text split
+                        // can produce more segments than actual slots (e.g. internal double-spaces
+                        // in GIGANTIC-style effects). Fall back to text-count only when no keys.
+                        $slotCount = !empty($keys) ? count($keys) : count($parts);
                         $group->setEffect1($this->findOrCreateEffect($parts[0] ?? null, 'en', $keys[0] ?? null));
-                        $group->setEffect2($this->findOrCreateEffect($parts[1] ?? null, 'en', $keys[1] ?? null));
-                        $group->setEffect3($this->findOrCreateEffect($parts[2] ?? null, 'en', $keys[2] ?? null));
+                        $group->setEffect2($slotCount >= 2 ? $this->findOrCreateEffect($parts[1] ?? null, 'en', $keys[1] ?? null) : null);
+                        $group->setEffect3($slotCount >= 3 ? $this->findOrCreateEffect($parts[2] ?? null, 'en', $keys[2] ?? null) : null);
                     }
                 }
 
