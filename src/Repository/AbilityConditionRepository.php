@@ -51,4 +51,23 @@ class AbilityConditionRepository extends ServiceEntityRepository
         }
         return $result;
     }
+
+    /** @return array<int, string[]> alteredId → distinct faction codes */
+    public function findFactionCodesByAlteredId(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative('
+            SELECT DISTINCT ac.altered_id, f.code
+            FROM ability_condition ac
+            JOIN main_effect me ON me.ability_condition_id = ac.id
+            JOIN card_group cg ON (cg.effect1_id = me.id OR cg.effect2_id = me.id OR cg.effect3_id = me.id OR cg.echo_effect1_id = me.id)
+            JOIN faction f ON f.id = cg.faction_id
+            ORDER BY ac.altered_id, f.code
+        ');
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[(int) $row['altered_id']][] = $row['code'];
+        }
+        return $result;
+    }
 }
