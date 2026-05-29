@@ -18,11 +18,14 @@ final class TriggerController extends AbstractController
     {
         $result = [];
 
+        $factionsByAlteredId = $this->repository->findFactionCodesByAlteredId();
+
         foreach ($this->repository->findBy([], ['alteredId' => 'ASC']) as $trigger) {
             $result[] = [
                 'alteredId'     => $trigger->getAlteredId(),
                 'filterExample' => 'effectTriggerType=' . $trigger->getAlteredId(),
                 'isSupport'     => $trigger->isSupport(),
+                'factions'      => $factionsByAlteredId[$trigger->getAlteredId()] ?? [],
                 'translations'  => $trigger->getText(),
             ];
         }

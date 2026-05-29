@@ -18,11 +18,14 @@ final class EffectController extends AbstractController
     {
         $result = [];
 
+        $factionsByAlteredId = $this->repository->findFactionCodesByAlteredId();
+
         foreach ($this->repository->findBy([], ['alteredId' => 'ASC']) as $effect) {
             $result[] = [
                 'alteredId'     => $effect->getAlteredId(),
                 'filterExample' => 'effectSlot[1][effect]=' . $effect->getAlteredId(),
                 'isSupport'     => $effect->isSupport(),
+                'factions'      => $factionsByAlteredId[$effect->getAlteredId()] ?? [],
                 'translations'  => $effect->getText(),
             ];
         }
