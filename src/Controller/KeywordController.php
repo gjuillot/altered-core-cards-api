@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Service\EffectParser;
+use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
@@ -29,9 +30,19 @@ class KeywordController extends AbstractController
         EffectParser::KW_DON                => ['fr' => 'Don',                'en' => 'Gift'],
     ];
 
+    public function __construct(
+        private readonly CacheItemPoolInterface $cache,
+    ) {}
+
     #[Route('/api/keywords', name: 'api_keywords', methods: ['GET'])]
     public function index(): JsonResponse
     {
+        $item = $this->cache->getItem('api.catalog.keywords');
+
+        if ($item->isHit()) {
+            return $this->json($item->get());
+        }
+
         $result = [];
 
         foreach (self::KEYWORD_CATALOG as $code => $meta) {
@@ -44,6 +55,9 @@ class KeywordController extends AbstractController
                 ],
             ];
         }
+
+        $item->set($result)->expiresAfter(null);
+        $this->cache->save($item);
 
         return $this->json($result);
     }
