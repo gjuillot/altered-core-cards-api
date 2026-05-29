@@ -73,15 +73,18 @@ final class EffectTriggerTypeFilter extends AbstractFilter
         $a1 = $queryNameGenerator->generateJoinAlias('effect1');
         $a2 = $queryNameGenerator->generateJoinAlias('effect2');
         $a3 = $queryNameGenerator->generateJoinAlias('effect3');
+        $ae = $queryNameGenerator->generateJoinAlias('echoEffect1');
 
         $queryBuilder
             ->leftJoin("$joinRoot.effect1", $a1)
             ->leftJoin("$joinRoot.effect2", $a2)
             ->leftJoin("$joinRoot.effect3", $a3)
+            ->leftJoin("$joinRoot.echoEffect1", $ae)
             ->andWhere(
                 "IDENTITY($a1.abilityTrigger) = :$param
                  OR IDENTITY($a2.abilityTrigger) = :$param
-                 OR IDENTITY($a3.abilityTrigger) = :$param"
+                 OR IDENTITY($a3.abilityTrigger) = :$param
+                 OR IDENTITY($ae.abilityTrigger) = :$param"
             )
             ->setParameter($param, $triggerId);
         $this->profiler?->stop('trigger');

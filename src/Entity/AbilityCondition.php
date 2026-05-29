@@ -6,6 +6,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use App\Repository\AbilityConditionRepository;
+use App\Service\KeywordLocalizer;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 
@@ -53,11 +54,11 @@ class AbilityCondition
     public function getText(): array
     {
         return array_filter([
-            'fr' => $this->textFr,
-            'en' => $this->textEn,
-            'it' => $this->textIt,
-            'es' => $this->textEs,
-            'de' => $this->textDe,
+            'fr' => KeywordLocalizer::localize($this->textFr, 'fr'),
+            'en' => KeywordLocalizer::localize($this->textEn, 'en'),
+            'it' => KeywordLocalizer::localize($this->textIt, 'it'),
+            'es' => KeywordLocalizer::localize($this->textEs, 'es'),
+            'de' => KeywordLocalizer::localize($this->textDe, 'de'),
         ]);
     }
 
