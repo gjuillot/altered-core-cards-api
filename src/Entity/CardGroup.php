@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Filter\ReferenceFilter;
+use App\Service\KeywordLocalizer;
 use App\Filter\CardNameFilter;
 use App\Model\TimestampInterface;
 use App\Entity\Rarity;
@@ -225,8 +226,9 @@ class CardGroup implements TimestampInterface
     {
         $result = [];
         foreach ($this->translations as $t) {
-            if ($t->getMainEffect() !== null) {
-                $result[$t->getLocale()] = $t->getMainEffect();
+            $text = $t->getMainEffect();
+            if ($text !== null) {
+                $result[$t->getLocale()] = KeywordLocalizer::localize($text, $t->getLocale());
             }
         }
         return $result;
@@ -238,8 +240,9 @@ class CardGroup implements TimestampInterface
     {
         $result = [];
         foreach ($this->translations as $t) {
-            if ($t->getEchoEffect() !== null) {
-                $result[$t->getLocale()] = $t->getEchoEffect();
+            $text = $t->getEchoEffect();
+            if ($text !== null) {
+                $result[$t->getLocale()] = KeywordLocalizer::localize($text, $t->getLocale());
             }
         }
         return $result;
