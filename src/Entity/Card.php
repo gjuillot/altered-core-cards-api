@@ -70,6 +70,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
     'set.reference'              => 'exact',
     'kickstarter'                => 'exact',
     'promo'                      => 'exact',
+    'transfuge'                  => 'exact',
     'isSerialized'               => 'exact',
     'variation'                  => 'exact',
     'collectorNumberFormatedId'  => 'exact',
