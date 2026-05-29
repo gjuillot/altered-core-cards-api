@@ -91,6 +91,14 @@ final class EffectSlotFilter extends AbstractFilter
                     $slotExprs[] = '(' . implode(' AND ', $parts) . ')';
                 }
             }
+            // echo slot
+            $echoParts = [];
+            if ($trigger > 0)   $echoParts[] = "cs.et1 = $trigger";
+            if ($condition > 0) $echoParts[] = "cs.ec1 = $condition";
+            if ($effect > 0)    $echoParts[] = "cs.ee1 = $effect";
+            if ($echoParts) {
+                $slotExprs[] = '(' . implode(' AND ', $echoParts) . ')';
+            }
 
             if ($slotExprs) {
                 $criteriaExprs[] = '(' . implode(' OR ', $slotExprs) . ')';
@@ -174,6 +182,29 @@ final class EffectSlotFilter extends AbstractFilter
                 if ($parts) {
                     $slotExprs[] = '(' . implode(' AND ', $parts) . ')';
                 }
+            }
+
+            // echo slot
+            $ae = $qng->generateJoinAlias('echoEffect1');
+            $qb->leftJoin("$cgAlias.echoEffect1", $ae);
+            $echoParts = [];
+            if ($trigger > 0) {
+                $p = $qng->generateParameterName('et');
+                $echoParts[] = "IDENTITY($ae.abilityTrigger) = :$p";
+                $qb->setParameter($p, $trigger);
+            }
+            if ($condition > 0) {
+                $p = $qng->generateParameterName('ec');
+                $echoParts[] = "IDENTITY($ae.abilityCondition) = :$p";
+                $qb->setParameter($p, $condition);
+            }
+            if ($effect > 0) {
+                $p = $qng->generateParameterName('ee');
+                $echoParts[] = "IDENTITY($ae.abilityEffect) = :$p";
+                $qb->setParameter($p, $effect);
+            }
+            if ($echoParts) {
+                $slotExprs[] = '(' . implode(' AND ', $echoParts) . ')';
             }
 
             if ($slotExprs) {

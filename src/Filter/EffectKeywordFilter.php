@@ -108,10 +108,12 @@ final class EffectKeywordFilter extends AbstractFilter
         $a1 = $qng->generateJoinAlias('effect1');
         $a2 = $qng->generateJoinAlias('effect2');
         $a3 = $qng->generateJoinAlias('effect3');
+        $ae = $qng->generateJoinAlias('echoEffect1');
 
         $qb->leftJoin("$joinRoot.effect1", $a1)
            ->leftJoin("$joinRoot.effect2", $a2)
-           ->leftJoin("$joinRoot.effect3", $a3);
+           ->leftJoin("$joinRoot.effect3", $a3)
+           ->leftJoin("$joinRoot.echoEffect1", $ae);
 
         if ($mode === 'and') {
             foreach ($keywords as $i => $kw) {
@@ -119,7 +121,8 @@ final class EffectKeywordFilter extends AbstractFilter
                 $qb->andWhere(
                     "JSONB_CONTAINS($a1.keywords, :$p) = true
                      OR JSONB_CONTAINS($a2.keywords, :$p) = true
-                     OR JSONB_CONTAINS($a3.keywords, :$p) = true"
+                     OR JSONB_CONTAINS($a3.keywords, :$p) = true
+                     OR JSONB_CONTAINS($ae.keywords, :$p) = true"
                 )->setParameter($p, json_encode([['k' => $kw]]));
             }
         } else {
@@ -128,7 +131,8 @@ final class EffectKeywordFilter extends AbstractFilter
                 $p = $qng->generateParameterName($property . $i);
                 $orClauses[] = "JSONB_CONTAINS($a1.keywords, :$p) = true
                                 OR JSONB_CONTAINS($a2.keywords, :$p) = true
-                                OR JSONB_CONTAINS($a3.keywords, :$p) = true";
+                                OR JSONB_CONTAINS($a3.keywords, :$p) = true
+                                OR JSONB_CONTAINS($ae.keywords, :$p) = true";
                 $qb->setParameter($p, json_encode([['k' => $kw]]));
             }
             $qb->andWhere(implode(' OR ', $orClauses));
