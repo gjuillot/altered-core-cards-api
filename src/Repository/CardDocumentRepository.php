@@ -10,36 +10,61 @@ use Doctrine\DBAL\Connection;
  */
 final class CardDocumentRepository
 {
+    /** Fields that require joined tables — cannot be selected directly from card. */
+    private const EFFECT_FIELDS = [
+        'slot1_trigger', 'slot1_condition', 'slot1_effect',
+        'slot2_trigger', 'slot2_condition', 'slot2_effect',
+        'slot3_trigger', 'slot3_condition', 'slot3_effect',
+        'echo_trigger',  'echo_condition',  'echo_effect',
+        'trigger_repeat_count', 'has_effect', 'keywords',
+        'transfuge',
+    ];
+
     public function __construct(private readonly Connection $connection) {}
 
     /**
-     * Stream only specific card columns — no JOINs, no GROUP BY, no temp files.
+     * Stream only specific card columns.
      * Use for partial Meilisearch updates when only a few fields changed.
      *
-     * @param string[] $fields  Column names on the card table (e.g. ['set_date', 'collector_number_formated_id'])
+     * @param string[] $fields
      * @return \Generator<int, array<int, array<string, mixed>>>
      */
     public function streamPartialDocuments(array $fields, int $batchSize = 2000): \Generator
     {
         $needsCostRelation = in_array('cost_relation', $fields, true);
-        $directFields      = array_filter($fields, fn($f) => $f !== 'cost_relation');
+        $needsEffects      = (bool) array_intersect($fields, self::EFFECT_FIELDS);
+        $directFields      = array_filter($fields, fn($f) => $f !== 'cost_relation' && !in_array($f, self::EFFECT_FIELDS, true));
 
-        $cols = implode(', ', array_map(fn($f) => "c.$f AS $f", $directFields));
-        $join = '';
+        $cols  = $directFields ? implode(', ', array_map(fn($f) => "c.$f AS $f", $directFields)) : '';
+        $joins = [];
 
-        if ($needsCostRelation) {
-            $cols .= ($cols !== '' ? ', ' : '') . 'cg.main_cost, cg.recall_cost';
-            $join  = 'LEFT JOIN card_group cg ON cg.id = c.card_group_id';
+        if ($needsCostRelation || $needsEffects) {
+            $joins[] = 'LEFT JOIN card_group cg ON cg.id = c.card_group_id';
+            $cols   .= ($cols !== '' ? ', ' : '') . 'cg.main_cost, cg.recall_cost';
         }
 
-        $result = $this->connection->executeQuery("SELECT c.id, $cols FROM card c $join ORDER BY c.id");
+        if ($needsEffects) {
+            $joins[] = 'LEFT JOIN main_effect me1 ON me1.id = cg.effect1_id';
+            $joins[] = 'LEFT JOIN main_effect me2 ON me2.id = cg.effect2_id';
+            $joins[] = 'LEFT JOIN main_effect me3 ON me3.id = cg.effect3_id';
+            $joins[] = 'LEFT JOIN main_effect mee ON mee.id = cg.echo_effect1_id';
+            $joins[] = 'LEFT JOIN card_search cks ON cks.card_id = c.id';
+            $cols   .= ', ' . $this->effectSlotColumns() . ', cks.has_effect, cks.keywords, c.transfuge';
+        }
+
+        $joinSql = implode(' ', $joins);
+        $result  = $this->connection->executeQuery("SELECT c.id, $cols FROM card c $joinSql ORDER BY c.id");
 
         $batch = [];
         while (($row = $result->fetchAssociative()) !== false) {
             $doc = ['id' => (int) $row['id']] + array_intersect_key($row, array_flip($directFields));
 
-            if ($needsCostRelation) {
+            if ($needsCostRelation || $needsEffects) {
                 $doc['cost_relation'] = $this->computeCostRelation($row['main_cost'], $row['recall_cost']);
+            }
+
+            if ($needsEffects) {
+                $doc += $this->hydrateEffectFields($row);
             }
 
             $batch[] = $doc;
@@ -110,9 +135,6 @@ final class CardDocumentRepository
         if ($text === null) {
             return null;
         }
-        // Round-trip through json_encode/decode: JSON_INVALID_UTF8_IGNORE drops any
-        // byte sequence that is not valid UTF-8, guaranteeing the result can be
-        // re-encoded by the Meilisearch SDK without producing "trailing characters".
         $encoded = json_encode($text, JSON_INVALID_UTF8_IGNORE | JSON_UNESCAPED_UNICODE);
         if ($encoded === false) {
             return null;
@@ -121,15 +143,13 @@ final class CardDocumentRepository
         if (!is_string($clean)) {
             return null;
         }
-        // Strip ASCII control characters that are illegal in JSON strings
-        // (keep \t=0x09, \n=0x0A, \r=0x0D). No /u flag needed — these are
-        // single-byte values that never appear in UTF-8 multibyte sequences.
         return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $clean);
     }
 
     private function buildSql(bool $whereCardId = false): string
     {
-        $where = $whereCardId ? 'WHERE c.id = :id' : '';
+        $where      = $whereCardId ? 'WHERE c.id = :id' : '';
+        $effectCols = $this->effectSlotColumns();
 
         return <<<SQL
             SELECT
@@ -137,6 +157,7 @@ final class CardDocumentRepository
                 c.reference,
                 c.kickstarter,
                 c.promo,
+                c.transfuge,
                 c.is_serialized,
                 c.variation,
                 c.collector_number_formated_id,
@@ -153,6 +174,9 @@ final class CardDocumentRepository
                 f.code                                                                AS faction_code,
                 r.reference                                                           AS rarity,
                 ct.reference                                                          AS card_type,
+                $effectCols,
+                cks.has_effect,
+                cks.keywords,
                 MAX(CASE WHEN cgt.locale = 'fr' THEN cgt.name        END)            AS name_fr,
                 MAX(CASE WHEN cgt.locale = 'en' THEN cgt.name        END)            AS name_en,
                 MAX(CASE WHEN cgt.locale = 'fr' THEN cgt.main_effect END)            AS main_effect_fr,
@@ -164,24 +188,50 @@ final class CardDocumentRepository
                     '[]'
                 )                                                                     AS sub_types
             FROM card c
-            LEFT JOIN card_group              cg   ON cg.id  = c.card_group_id
-            LEFT JOIN card_set                cs   ON cs.id  = c.set_id
-            LEFT JOIN faction                 f    ON f.id   = cg.faction_id
-            LEFT JOIN rarity                  r    ON r.id   = cg.rarity_id
-            LEFT JOIN card_type               ct   ON ct.id  = cg.card_type_id
-            LEFT JOIN card_group_translation  cgt  ON cgt.card_group_id = cg.id
+            LEFT JOIN card_group               cg   ON cg.id  = c.card_group_id
+            LEFT JOIN card_set                 cs   ON cs.id  = c.set_id
+            LEFT JOIN faction                  f    ON f.id   = cg.faction_id
+            LEFT JOIN rarity                   r    ON r.id   = cg.rarity_id
+            LEFT JOIN card_type                ct   ON ct.id  = cg.card_type_id
+            LEFT JOIN main_effect              me1  ON me1.id = cg.effect1_id
+            LEFT JOIN main_effect              me2  ON me2.id = cg.effect2_id
+            LEFT JOIN main_effect              me3  ON me3.id = cg.effect3_id
+            LEFT JOIN main_effect              mee  ON mee.id = cg.echo_effect1_id
+            LEFT JOIN card_search              cks  ON cks.card_id = c.id
+            LEFT JOIN card_group_translation   cgt  ON cgt.card_group_id = cg.id
             LEFT JOIN card_group_sub_type_link cgsl ON cgsl.card_group_id = cg.id
-            LEFT JOIN card_sub_type           cst  ON cst.id = cgsl.card_sub_type_id
+            LEFT JOIN card_sub_type            cst  ON cst.id = cgsl.card_sub_type_id
             $where
             GROUP BY
-                c.id, c.reference, c.kickstarter, c.promo, c.is_serialized, c.variation,
-                c.collector_number_formated_id, c.set_date,
+                c.id, c.reference, c.kickstarter, c.promo, c.transfuge,
+                c.is_serialized, c.variation, c.collector_number_formated_id, c.set_date,
                 cs.reference, cs.date,
                 cg.main_cost, cg.recall_cost, cg.ocean_power, cg.mountain_power, cg.forest_power,
                 cg.is_banned, cg.is_suspended, cg.is_errated,
-                f.code, r.reference, ct.reference
+                f.code, r.reference, ct.reference,
+                me1.ability_key, me2.ability_key, me3.ability_key, mee.ability_key,
+                cks.has_effect, cks.keywords
             ORDER BY c.id
         SQL;
+    }
+
+    /** SQL expressions for the 12 slot fields — reused in full and partial queries. */
+    private function effectSlotColumns(): string
+    {
+        $slots = [
+            'slot1' => 'me1', 'slot2' => 'me2', 'slot3' => 'me3', 'echo' => 'mee',
+        ];
+        $parts = [];
+        foreach ($slots as $name => $alias) {
+            foreach (['trigger' => 1, 'condition' => 2, 'effect' => 3] as $part => $pos) {
+                // Only process keys matching the numeric format \d+_\d+_\d+ —
+                // old-format keys (e.g. "ALT_...") are skipped and return NULL.
+                $parts[] = "CASE WHEN {$alias}.ability_key ~ '^\d+_\d+_\d+$'"
+                    . " THEN NULLIF(SPLIT_PART({$alias}.ability_key, '_', {$pos})::integer, 0)"
+                    . " ELSE NULL END AS {$name}_{$part}";
+            }
+        }
+        return implode(",\n                ", $parts);
     }
 
     /**
@@ -206,7 +256,6 @@ final class CardDocumentRepository
             'sub_types'      => json_decode((string) $row['sub_types'], true),
             'main_cost'      => $row['main_cost'] !== null ? (int) $row['main_cost'] : null,
             'recall_cost'    => $row['recall_cost'] !== null ? (int) $row['recall_cost'] : null,
-            'cost_relation'  => $this->computeCostRelation($row['main_cost'], $row['recall_cost']),
             'ocean_power'    => $row['ocean_power'] !== null ? (int) $row['ocean_power'] : null,
             'mountain_power' => $row['mountain_power'] !== null ? (int) $row['mountain_power'] : null,
             'forest_power'   => $row['forest_power'] !== null ? (int) $row['forest_power'] : null,
@@ -216,9 +265,38 @@ final class CardDocumentRepository
             'is_serialized'  => (bool) $row['is_serialized'],
             'kickstarter'    => (bool) $row['kickstarter'],
             'promo'          => (bool) $row['promo'],
+            'transfuge'      => (bool) $row['transfuge'],
             'variation'                    => $row['variation'],
             'collector_number_formated_id' => $row['collector_number_formated_id'],
             'set_date'                     => $row['set_date'],
+        ] + $this->hydrateEffectFields($row);
+    }
+
+    /** @param array<string, mixed> $row */
+    private function hydrateEffectFields(array $row): array
+    {
+        $t1 = isset($row['slot1_trigger'])  ? ($row['slot1_trigger']  !== null ? (int) $row['slot1_trigger']  : null) : null;
+        $t2 = isset($row['slot2_trigger'])  ? ($row['slot2_trigger']  !== null ? (int) $row['slot2_trigger']  : null) : null;
+        $t3 = isset($row['slot3_trigger'])  ? ($row['slot3_trigger']  !== null ? (int) $row['slot3_trigger']  : null) : null;
+        $te = isset($row['echo_trigger'])   ? ($row['echo_trigger']   !== null ? (int) $row['echo_trigger']   : null) : null;
+
+        return [
+            'slot1_trigger'   => $t1,
+            'slot1_condition' => isset($row['slot1_condition']) && $row['slot1_condition'] !== null ? (int) $row['slot1_condition'] : null,
+            'slot1_effect'    => isset($row['slot1_effect'])    && $row['slot1_effect']    !== null ? (int) $row['slot1_effect']    : null,
+            'slot2_trigger'   => $t2,
+            'slot2_condition' => isset($row['slot2_condition']) && $row['slot2_condition'] !== null ? (int) $row['slot2_condition'] : null,
+            'slot2_effect'    => isset($row['slot2_effect'])    && $row['slot2_effect']    !== null ? (int) $row['slot2_effect']    : null,
+            'slot3_trigger'   => $t3,
+            'slot3_condition' => isset($row['slot3_condition']) && $row['slot3_condition'] !== null ? (int) $row['slot3_condition'] : null,
+            'slot3_effect'    => isset($row['slot3_effect'])    && $row['slot3_effect']    !== null ? (int) $row['slot3_effect']    : null,
+            'echo_trigger'    => $te,
+            'echo_condition'  => isset($row['echo_condition'])  && $row['echo_condition']  !== null ? (int) $row['echo_condition']  : null,
+            'echo_effect'     => isset($row['echo_effect'])     && $row['echo_effect']     !== null ? (int) $row['echo_effect']     : null,
+            'trigger_repeat_count' => $this->computeTriggerRepeatCount($t1, $t2, $t3, $te),
+            'has_effect'  => isset($row['has_effect']) ? (bool) $row['has_effect'] : false,
+            'keywords'    => isset($row['keywords'])   ? $this->parseKeywords($row['keywords']) : [],
+            'transfuge'   => isset($row['transfuge'])  ? (bool) $row['transfuge'] : false,
         ];
     }
 
@@ -232,5 +310,25 @@ final class CardDocumentRepository
         if ($m === $r) return 'equal';
         if ($m > $r)  return 'mainHigher';
         return 'recallHigher';
+    }
+
+    private function computeTriggerRepeatCount(?int $t1, ?int $t2, ?int $t3, ?int $te): int
+    {
+        $counts = [];
+        foreach ([$t1, $t2, $t3, $te] as $t) {
+            if ($t !== null) {
+                $counts[$t] = ($counts[$t] ?? 0) + 1;
+            }
+        }
+        return !empty($counts) ? max($counts) : 0;
+    }
+
+    /** Parse PostgreSQL TEXT[] string e.g. "{CORIACE,FUGACE}" into a PHP array. */
+    private function parseKeywords(mixed $raw): array
+    {
+        if (!is_string($raw) || $raw === '{}' || $raw === '') {
+            return [];
+        }
+        return array_values(array_filter(explode(',', trim($raw, '{}'))));
     }
 }
