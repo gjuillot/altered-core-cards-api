@@ -190,6 +190,7 @@ final class CardDocumentRepository
             'sub_types'      => json_decode((string) $row['sub_types'], true),
             'main_cost'      => $row['main_cost'] !== null ? (int) $row['main_cost'] : null,
             'recall_cost'    => $row['recall_cost'] !== null ? (int) $row['recall_cost'] : null,
+            'cost_relation'  => $this->computeCostRelation($row['main_cost'], $row['recall_cost']),
             'ocean_power'    => $row['ocean_power'] !== null ? (int) $row['ocean_power'] : null,
             'mountain_power' => $row['mountain_power'] !== null ? (int) $row['mountain_power'] : null,
             'forest_power'   => $row['forest_power'] !== null ? (int) $row['forest_power'] : null,
@@ -203,5 +204,17 @@ final class CardDocumentRepository
             'collector_number_formated_id' => $row['collector_number_formated_id'],
             'set_date'                     => $row['set_date'],
         ];
+    }
+
+    private function computeCostRelation(mixed $main, mixed $recall): ?string
+    {
+        if ($main === null || $recall === null) {
+            return null;
+        }
+        $m = (int) $main;
+        $r = (int) $recall;
+        if ($m === $r) return 'equal';
+        if ($m > $r)  return 'mainHigher';
+        return 'recallHigher';
     }
 }

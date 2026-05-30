@@ -29,6 +29,7 @@ final class FilteredCardCountRepository
         'set.reference' => ['cs',  'reference',      ['cs']],
         'cardType'      => ['ct',  'reference',      ['cg', 'ct']],
         'subTypes'      => ['cst', 'reference',      ['cg', 'cgsl', 'cst']],
+        'costRelation'  => null,
     ];
 
     public function __construct(private readonly Connection $connection) {}
@@ -46,6 +47,19 @@ final class FilteredCardCountRepository
             if (!isset(self::COL[$key])) {
                 continue;
             }
+
+            // costRelation is a comparison, not a column lookup
+            if ($key === 'costRelation' && is_string($raw) && $raw !== '') {
+                $joins['cg'] = true;
+                match ($raw) {
+                    'equal'        => $qb->andWhere('cg.main_cost = cg.recall_cost'),
+                    'mainHigher'   => $qb->andWhere('cg.main_cost > cg.recall_cost'),
+                    'recallHigher' => $qb->andWhere('cg.recall_cost > cg.main_cost'),
+                    default        => null,
+                };
+                continue;
+            }
+
             $values = array_values(array_filter((array) $raw, fn($v) => $v !== '' && $v !== null));
             if (empty($values)) {
                 continue;
