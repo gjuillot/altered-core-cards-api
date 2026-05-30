@@ -56,6 +56,7 @@ final class MeilisearchService
         'kickstarter',
         'promo',
         'variation',
+        'cost_relation',
     ];
 
     private Client $client;

@@ -44,6 +44,7 @@ final class SearchAwareCollectionProvider implements ProviderInterface
         'isSuspended'   => 'is_suspended',
         'isErrated'     => 'is_errated',
         'variation'     => 'variation',
+        'costRelation'  => 'cost_relation',
     ];
 
     /** API Platform order key → Meilisearch sortable attribute */

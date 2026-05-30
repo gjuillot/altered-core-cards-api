@@ -114,13 +114,13 @@ class ImportEquinoxAbilitiesCommand extends Command
 
                         // Equinox element types vs our table naming:
                         //   TRIGGER   → ability_trigger  (position 1 in t_c_e key)
-                        //   OUTPUT    → ability_condition (position 2 in t_c_e key — the main output text)
-                        //   CONDITION → ability_effect    (position 3 in t_c_e key — the conditional clause)
+                        //   OUTPUT    → ability_effect    (position 2 in t_c_e key — the main output text)
+                        //   CONDITION → ability_condition (position 3 in t_c_e key — the conditional clause)
                         $partType = match ($type) {
                             'trigger'   => 'trigger',
-                            'output'    => 'condition',
-                            'condition' => 'effect',
-                            default     => 'condition',
+                            'output'    => 'effect',
+                            'condition' => 'condition',
+                            default     => 'effect',
                         };
 
                         // Use idGd from elements directly — works regardless of reference format
