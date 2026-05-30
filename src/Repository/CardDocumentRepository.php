@@ -21,12 +21,28 @@ final class CardDocumentRepository
      */
     public function streamPartialDocuments(array $fields, int $batchSize = 2000): \Generator
     {
-        $cols   = implode(', ', array_map(fn($f) => "c.$f AS $f", $fields));
-        $result = $this->connection->executeQuery("SELECT c.id, $cols FROM card c ORDER BY c.id");
+        $needsCostRelation = in_array('cost_relation', $fields, true);
+        $directFields      = array_filter($fields, fn($f) => $f !== 'cost_relation');
+
+        $cols = implode(', ', array_map(fn($f) => "c.$f AS $f", $directFields));
+        $join = '';
+
+        if ($needsCostRelation) {
+            $cols .= ($cols !== '' ? ', ' : '') . 'cg.main_cost, cg.recall_cost';
+            $join  = 'LEFT JOIN card_group cg ON cg.id = c.card_group_id';
+        }
+
+        $result = $this->connection->executeQuery("SELECT c.id, $cols FROM card c $join ORDER BY c.id");
 
         $batch = [];
         while (($row = $result->fetchAssociative()) !== false) {
-            $batch[] = ['id' => (int) $row['id']] + array_intersect_key($row, array_flip($fields));
+            $doc = ['id' => (int) $row['id']] + array_intersect_key($row, array_flip($directFields));
+
+            if ($needsCostRelation) {
+                $doc['cost_relation'] = $this->computeCostRelation($row['main_cost'], $row['recall_cost']);
+            }
+
+            $batch[] = $doc;
 
             if (count($batch) >= $batchSize) {
                 yield $batch;
