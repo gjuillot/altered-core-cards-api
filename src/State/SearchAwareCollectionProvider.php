@@ -4,20 +4,14 @@ namespace App\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
-use App\Repository\FilteredCardCountRepository;
-use App\Service\FilterCacheKeyService;
 use App\Service\MeilisearchService;
-use Psr\Cache\CacheItemPoolInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
- * Wraps CardCollectionProvider and resolves the total item count via Meilisearch
- * when a name (full-text) search is active.
+ * Wraps CardCollectionProvider and delegates filtering + pagination to Meilisearch
+ * whenever all active filters are mapped in FILTER_MAP.
  *
- * Meilisearch is called with limit=0, which returns estimatedTotalHits instantly
- * without fetching any documents. The total is injected into the context under
- * '_meili_total' so CachedCountCollectionProvider can use it directly and skip
- * the expensive Doctrine COUNT query.
+ * Meilisearch returns IDs (paginated) and estimatedTotalHits (~0.2% inaccuracy).
+ * Doctrine then fetches only those specific IDs — no JOIN, no COUNT, no OFFSET.
  *
  * Meilisearch filter conditions are built from the active API Platform filters
  * so the total is accurate even when combined with structured filters (faction,
@@ -59,10 +53,6 @@ final class SearchAwareCollectionProvider implements ProviderInterface
     public function __construct(
         private readonly CardCollectionProvider $inner,
         private readonly MeilisearchService $meilisearch,
-        private readonly FilterCacheKeyService $cacheKeyService,
-        #[Autowire(service: 'cache.card_counts')]
-        private readonly CacheItemPoolInterface $cachePool,
-        private readonly FilteredCardCountRepository $filteredCountRepo,
     ) {}
 
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): object|array|null
@@ -97,32 +87,11 @@ final class SearchAwareCollectionProvider implements ProviderInterface
             $context['_meili_ids']      = $ids;
             $context['filters']['page'] = 1; // Meilisearch already paginated; Doctrine fetches at OFFSET 0
 
-            // Accurate total: Redis-cached DB count for structural filters.
-            // Name-search queries use Meilisearch estimate (too varied to cache per-combination).
-            if ($nameQuery === null) {
-                $cacheKey  = $this->cacheKeyService->make($operation->getClass() ?? '', $filters);
-                $cacheItem = $this->cachePool->getItem($cacheKey);
-                if ($cacheItem->isHit()) {
-                    $context['_meili_total'] = (float) $cacheItem->get();
-                } else {
-                    try {
-                        // Slow on first request for this filter combination, cached indefinitely after.
-                        $count = $this->filteredCountRepo->count($filters);
-                        $cacheItem->set((float) $count)->expiresAfter(null);
-                        $this->cachePool->save($cacheItem);
-                        $context['_meili_total'] = (float) $count;
-                    } catch (\Throwable) {
-                        $total = $this->fetchTotal($query, $meiliFilter, $attrs);
-                        if ($total !== null) {
-                            $context['_meili_total'] = $total;
-                        }
-                    }
-                }
-            } else {
-                $total = $this->fetchTotal($query, $meiliFilter, $attrs);
-                if ($total !== null) {
-                    $context['_meili_total'] = $total;
-                }
+            // Total: Meilisearch estimatedTotalHits for all cases.
+            // ~0.2% inaccuracy is acceptable; avoids expensive DB COUNT on every first request.
+            $total = $this->fetchTotal($query, $meiliFilter, $attrs);
+            if ($total !== null) {
+                $context['_meili_total'] = $total;
             }
 
             // Strip filters that Meilisearch already handled so Doctrine doesn't
