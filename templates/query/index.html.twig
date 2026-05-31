@@ -434,12 +434,6 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
                         </svg>
                     </button>
-                    <button id="view-grid" title="{{ 'query.result.view_grid'|trans }}"
-                            class="view-btn p-1.5 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
-                        </svg>
-                    </button>
                     <button id="view-render" title="Render"
                             class="view-btn p-1.5 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -593,12 +587,90 @@
         {% endfor %}
     ];
 
+    const EFFECTS = [
+        {% for e in effects %}
+        { id: {{ e.alteredId }}, label: {{ (e.textFr ?? e.textEn ?? e.alteredId ~ '')|json_encode(constant('JSON_HEX_TAG'))|raw }} },
+        {% endfor %}
+    ];
+
+    // ── Effect chain cache (trigger → conditions, trigger+condition → effects) ─
+    const chainCache = {};
+
+    async function fetchChain(url) {
+        if (chainCache[url]) return chainCache[url];
+        try {
+            const r = await fetch(url, { headers: { Accept: 'application/json' } });
+            if (!r.ok) return [];
+            const data = await r.json();
+            const result = Array.isArray(data) ? data : [];
+            chainCache[url] = result;
+            return result;
+        } catch { return []; }
+    }
+
+    function labelFor(item) {
+        return (displayLocale === 'en' ? item.en : item.fr) ?? item.fr ?? item.en ?? String(item.id);
+    }
+
+    function chainUrl(endpoint, params) {
+        const qs = Object.entries(params)
+            .filter(([, v]) => v)
+            .map(([k, v]) => `${k}=${v}`)
+            .join('&');
+        return `/api/effect-chain/${endpoint}${qs ? '?' + qs : ''}`;
+    }
+
+    async function refreshAll(row, idx, changed) {
+        const triggerSel   = row.querySelector('.slot-trigger');
+        const conditionSel = row.querySelector('.slot-condition');
+        const effectSel    = row.querySelector('.slot-effect');
+        const t = triggerSel.value;
+        const c = conditionSel.value;
+        const e = effectSel.value;
+
+        // Fetch the two selects that weren't just changed
+        const [triggersP, conditionsP, effectsP] = await Promise.all([
+            changed === 'trigger'   ? null : fetchChain(chainUrl('triggers',   { condition: c, effect: e })),
+            changed === 'condition' ? null : fetchChain(chainUrl('conditions', { trigger: t,   effect: e })),
+            changed === 'effect'    ? null : fetchChain(chainUrl('effects',    { trigger: t,   condition: c })),
+        ]);
+
+        if (triggersP !== null) {
+            const saved = triggerSel.value;
+            triggerSel.innerHTML = buildSelectHtml(triggersP.map(i => ({ id: i.id, label: labelFor(i) })), '— trigger —');
+            triggerSel.value = saved;
+        }
+        if (conditionsP !== null) {
+            const saved = conditionSel.value;
+            conditionSel.innerHTML = buildSelectHtml(conditionsP.map(i => ({ id: i.id, label: labelFor(i) })), '— condition —');
+            conditionSel.value = saved;
+        }
+        if (effectsP !== null) {
+            const saved = effectSel.value;
+            effectSel.innerHTML = buildSelectHtml(effectsP.map(i => ({ id: i.id, label: labelFor(i) })), '— effect —');
+            effectSel.value = saved;
+        }
+    }
+
+    async function resetChain(row, idx) {
+        row.querySelector('.slot-trigger').innerHTML   = buildSelectHtml(TRIGGERS,   '— trigger —');
+        row.querySelector('.slot-condition').innerHTML = buildSelectHtml(CONDITIONS, '— condition —');
+        row.querySelector('.slot-effect').innerHTML    = buildSelectHtml(EFFECTS,    '— effect —');
+        row.querySelector('.slot-trigger').value   = effectSlots[idx].trigger   || '';
+        row.querySelector('.slot-condition').value = effectSlots[idx].condition || '';
+        row.querySelector('.slot-effect').value    = effectSlots[idx].effect    || '';
+    }
+
     // ── Effect slot builder ─────────────────────────────────────────────────
+    function esc(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     function buildSelectHtml(items, placeholder) {
         let html = `<option value="">${placeholder}</option>`;
         items.forEach(({ id, label }) => {
-            const display = label ? label.substring(0, 60) : String(id);
-            html += `<option value="${id}">${display}</option>`;
+            const display = esc(label ? label.substring(0, 60) : String(id));
+            html += `<option value="${esc(id)}">${display}</option>`;
         });
         return html;
     }
@@ -615,24 +687,20 @@
             row.className = 'relative flex gap-1.5 items-start p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded';
             row.dataset.idx = idx;
 
+            const S = 'min-w-0 w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded p-1.5';
             row.innerHTML = `
-                <div class="flex-1 space-y-1.5">
-                    <div class="flex gap-1.5">
-                        <select class="slot-trigger ${SEL}" data-idx="${idx}">
-                            ${buildSelectHtml(TRIGGERS, '— trigger —')}
-                        </select>
-                        <select class="slot-condition ${SEL}" data-idx="${idx}">
-                            ${buildSelectHtml(CONDITIONS, '— condition —')}
-                        </select>
-                    </div>
-                    <div class="relative flex gap-1.5 items-center">
-                        <input type="text" class="slot-effect-search ${INP}" data-idx="${idx}"
-                               placeholder="${T.effect_search_ph}" autocomplete="off">
-                        <button type="button" class="slot-effect-clear hidden text-xs text-gray-400 hover:text-red-500 px-1 shrink-0" data-idx="${idx}" title="Effacer">✕</button>
-                        <div class="slot-effect-results hidden absolute left-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded shadow-lg text-xs max-h-48 overflow-y-auto w-full" data-idx="${idx}"></div>
-                    </div>
+                <div class="flex-1 grid grid-cols-3 gap-1.5">
+                    <select class="slot-trigger ${S}" data-idx="${idx}">
+                        ${buildSelectHtml(TRIGGERS, '— trigger —')}
+                    </select>
+                    <select class="slot-condition ${S}" data-idx="${idx}">
+                        ${buildSelectHtml(CONDITIONS, '— condition —')}
+                    </select>
+                    <select class="slot-effect ${S}" data-idx="${idx}">
+                        ${buildSelectHtml(EFFECTS, '— effect —')}
+                    </select>
                 </div>
-                <button type="button" class="slot-remove shrink-0 mt-1 text-gray-300 hover:text-red-500 text-sm font-bold leading-none" data-idx="${idx}" title="Supprimer">×</button>
+                <button type="button" class="slot-remove shrink-0 text-gray-300 hover:text-red-500 text-sm font-bold leading-none" data-idx="${idx}" title="Supprimer">×</button>
             `;
 
             container.appendChild(row);
@@ -640,27 +708,34 @@
             // Restore values
             const triggerSel   = row.querySelector('.slot-trigger');
             const conditionSel = row.querySelector('.slot-condition');
-            const searchInput  = row.querySelector('.slot-effect-search');
-            const clearBtn     = row.querySelector('.slot-effect-clear');
+            const effectSel    = row.querySelector('.slot-effect');
 
+            // Restore values then prefill chains
             if (slot.trigger)   triggerSel.value   = slot.trigger;
             if (slot.condition) conditionSel.value  = slot.condition;
-            if (slot.effect && slot.effectLabel) {
-                searchInput.value    = slot.effectLabel;
-                searchInput.readOnly = true;
-                clearBtn.classList.remove('hidden');
+            if (slot.effect)    effectSel.value     = slot.effect;
+
+            // If slot already has values, refresh the other selects accordingly
+            if (slot.trigger || slot.condition || slot.effect) {
+                const seeded = slot.trigger ? 'trigger' : slot.condition ? 'condition' : 'effect';
+                refreshAll(row, idx, seeded);
             }
 
             triggerSel.addEventListener('change', e => {
                 effectSlots[idx].trigger = e.target.value ? +e.target.value : '';
+                refreshAll(row, idx, 'trigger');
                 updatePreview();
             });
             conditionSel.addEventListener('change', e => {
                 effectSlots[idx].condition = e.target.value ? +e.target.value : '';
+                refreshAll(row, idx, 'condition');
                 updatePreview();
             });
-
-            bindEffectSearch(row, idx);
+            effectSel.addEventListener('change', e => {
+                effectSlots[idx].effect = e.target.value ? +e.target.value : '';
+                refreshAll(row, idx, 'effect');
+                updatePreview();
+            });
 
             row.querySelector('.slot-remove').addEventListener('click', () => {
                 effectSlots.splice(idx, 1);
@@ -670,75 +745,8 @@
         });
     }
 
-    function bindEffectSearch(row, idx) {
-        const searchInput = row.querySelector('.slot-effect-search');
-        const resultsDiv  = row.querySelector('.slot-effect-results');
-        const clearBtn    = row.querySelector('.slot-effect-clear');
-        let timer = null;
-
-        searchInput.addEventListener('input', () => {
-            clearTimeout(timer);
-            const q = searchInput.value.trim();
-            if (q.length < 2) { resultsDiv.classList.add('hidden'); return; }
-            timer = setTimeout(() => fetchEffects(q, resultsDiv, idx, searchInput, clearBtn), 250);
-        });
-
-        document.addEventListener('click', e => {
-            if (!row.contains(e.target)) resultsDiv.classList.add('hidden');
-        });
-
-        clearBtn.addEventListener('click', () => {
-            effectSlots[idx].effect      = '';
-            effectSlots[idx].effectLabel = '';
-            searchInput.value    = '';
-            searchInput.readOnly = false;
-            clearBtn.classList.add('hidden');
-            resultsDiv.innerHTML = '';
-            resultsDiv.classList.add('hidden');
-            updatePreview();
-        });
-    }
-
-    async function fetchEffects(q, resultsDiv, idx, searchInput, clearBtn) {
-        try {
-            const langParam = displayLocale === 'en' ? 'textEn' : 'textFr';
-            const resp = await fetch(`/api/ability_effects?${langParam}=${encodeURIComponent(q)}&itemsPerPage=20`, {
-                headers: { Accept: 'application/json' }
-            });
-            const data  = await resp.json();
-            const items = data['hydra:member'] ?? [];
-
-            resultsDiv.innerHTML = '';
-            if (items.length === 0) {
-                resultsDiv.innerHTML = `<div class="px-3 py-2 text-gray-400">${T.no_results}</div>`;
-            } else {
-                items.forEach(item => {
-                    const label = (displayLocale === 'en' ? item.text?.en : item.text?.fr) ?? item.text?.fr ?? item.text?.en ?? String(item.id);
-                    const div   = document.createElement('div');
-                    div.className = 'px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 text-gray-900 dark:text-gray-200';
-                    div.textContent = label.length > 100 ? label.substring(0, 100) + '…' : label;
-                    div.title = label;
-                    div.addEventListener('click', () => {
-                        const short = label.length > 70 ? label.substring(0, 70) + '…' : label;
-                        effectSlots[idx].effect      = item.alteredId;
-                        effectSlots[idx].effectLabel = short;
-                        searchInput.value    = short;
-                        searchInput.readOnly = true;
-                        clearBtn.classList.remove('hidden');
-                        resultsDiv.classList.add('hidden');
-                        updatePreview();
-                    });
-                    resultsDiv.appendChild(div);
-                });
-            }
-            resultsDiv.classList.remove('hidden');
-        } catch (e) {
-            console.error('Effect search error', e);
-        }
-    }
-
     document.getElementById('slot-add').addEventListener('click', () => {
-        effectSlots.push({ trigger: '', condition: '', effect: '', effectLabel: '' });
+        effectSlots.push({ trigger: '', condition: '', effect: '' });
         renderEffectSlots();
         updatePreview();
     });
@@ -933,7 +941,7 @@
         document.getElementById('view-list-panel').classList.toggle('hidden', mode !== 'list');
         document.getElementById('view-grid-panel').classList.toggle('hidden', mode !== 'grid');
         document.getElementById('view-render-panel').classList.toggle('hidden', mode !== 'render');
-        ['list', 'grid', 'render'].forEach(m => {
+        ['list', 'render'].forEach(m => {
             const btn = document.getElementById('view-' + m);
             if (!btn) return;
             btn.classList.toggle('bg-gray-100', mode === m);
@@ -942,7 +950,6 @@
         if (mode === 'render') renderAlteredCards(lastMembers);
     }
     document.getElementById('view-list').addEventListener('click', () => setViewMode('list'));
-    document.getElementById('view-grid').addEventListener('click', () => setViewMode('grid'));
     document.getElementById('view-render').addEventListener('click', () => setViewMode('render'));
 
     // ── Render ──────────────────────────────────────────────────────────────
@@ -1255,7 +1262,7 @@
         panel.classList.remove('hidden');
     }
 
-    setViewMode('list');
+    setViewMode('render');
     updatePreview();
 })();
 

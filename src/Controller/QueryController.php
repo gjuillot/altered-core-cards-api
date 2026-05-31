@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\AbilityCondition;
+use App\Entity\AbilityEffect;
 use App\Entity\AbilityTrigger;
 use App\Entity\CardSubType;
 use App\Entity\CardType;
@@ -30,6 +31,7 @@ class QueryController extends AbstractController
         $rarities   = $this->em->getRepository(Rarity::class)->findBy([], ['position' => 'ASC']);
         $triggers   = $this->em->getRepository(AbilityTrigger::class)->findBy([], ['id' => 'ASC']);
         $conditions = $this->em->getRepository(AbilityCondition::class)->findBy([], ['id' => 'ASC']);
+        $effects    = $this->em->getRepository(AbilityEffect::class)->findBy([], ['id' => 'ASC']);
 
         return $this->render('query/index.html.twig', [
             'factions'   => $factions,
@@ -39,6 +41,7 @@ class QueryController extends AbstractController
             'rarities'   => $rarities,
             'triggers'   => $triggers,
             'conditions' => $conditions,
+            'effects'    => $effects,
         ]);
     }
 }
