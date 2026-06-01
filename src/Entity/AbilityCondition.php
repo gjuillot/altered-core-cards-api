@@ -50,6 +50,10 @@ class AbilityCondition
     #[Groups(['ability_condition:read', 'main_effect:read', 'card:read'])]
     private bool $isSupport = false;
 
+    #[ORM\Column(type: 'boolean', nullable: false)]
+    #[Groups(['ability_condition:read', 'main_effect:read', 'card:read'])]
+    private bool $isMain = false;
+
     #[Groups(['ability_condition:read', 'main_effect:read', 'card:read'])]
     public function getText(): array
     {
@@ -84,6 +88,9 @@ class AbilityCondition
 
     public function isSupport(): bool { return $this->isSupport; }
     public function setIsSupport(bool $isSupport): self { $this->isSupport = $isSupport; return $this; }
+
+    public function isMain(): bool { return $this->isMain; }
+    public function setIsMain(bool $isMain): self { $this->isMain = $isMain; return $this; }
 
     public function getTextForLocale(string $locale): ?string
     {

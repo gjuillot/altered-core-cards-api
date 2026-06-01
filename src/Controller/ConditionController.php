@@ -31,6 +31,7 @@ final class ConditionController extends AbstractController
             $result[] = [
                 'alteredId'     => $condition->getAlteredId(),
                 'filterExample' => 'effectSlot[1][condition]=' . $condition->getAlteredId(),
+                'isMain'        => $condition->isMain(),
                 'isSupport'     => $condition->isSupport(),
                 'factions'      => $factionsByAlteredId[$condition->getAlteredId()] ?? [],
                 'translations'  => $condition->getText(),

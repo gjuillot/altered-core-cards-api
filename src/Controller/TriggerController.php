@@ -31,6 +31,7 @@ final class TriggerController extends AbstractController
             $result[] = [
                 'alteredId'     => $trigger->getAlteredId(),
                 'filterExample' => 'effectTriggerType=' . $trigger->getAlteredId(),
+                'isMain'        => $trigger->isMain(),
                 'isSupport'     => $trigger->isSupport(),
                 'factions'      => $factionsByAlteredId[$trigger->getAlteredId()] ?? [],
                 'translations'  => $trigger->getText(),
