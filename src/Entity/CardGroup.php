@@ -66,6 +66,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\HasNoEffectFilter::class, properties: ['hasNoEffect'])]
 #[ApiFilter(\App\Filter\SameTriggerCountFilter::class, properties: ['minSameTriggerCount'])]
 #[ApiFilter(\App\Filter\EffectSlotFilter::class, properties: ['effectSlot'])]
+#[ApiFilter(\App\Filter\EchoSlotFilter::class, properties: ['echoSlot', 'hasEchoEffect'])]
 #[ApiFilter(\App\Filter\CardNameFilter::class, properties: ['name'])]
 #[ApiFilter(OrderFilter::class, properties: ['mainCost', 'recallCost'])]
 #[ApiFilter(\App\Filter\AfterIdFilter::class, properties: ['afterId'])]
