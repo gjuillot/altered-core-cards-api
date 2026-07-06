@@ -28,6 +28,7 @@ final class MeilisearchFilterBuilderService
         'effectTriggerType', 'effectKeyword', 'effectKeywordMode',
         'effectSlot', 'effectSlotMode', 'hasNoEffect', 'minSameTriggerCount',
         'echoSlot', 'echoSlotMode', 'hasEchoEffect',
+        'gameplayFormat', 'gameplayFormatMode',
     ];
 
     private const SLOT_NAMES = ['slot1', 'slot2', 'slot3', 'echo'];
@@ -120,6 +121,15 @@ final class MeilisearchFilterBuilderService
             if (!empty($kws)) {
                 $kwParts = array_map(fn($kw) => sprintf('keywords = "%s"', addslashes((string) $kw)), $kws);
                 $parts[] = '(' . implode($mode === 'and' ? ' AND ' : ' OR ', $kwParts) . ')';
+            }
+        }
+
+        if (isset($filters['gameplayFormat'])) {
+            $formats = array_values(array_filter((array) $filters['gameplayFormat'], fn($v) => $v !== '' && $v !== null));
+            $mode    = strtolower((string) ($filters['gameplayFormatMode'] ?? 'or'));
+            if (!empty($formats)) {
+                $fmtParts = array_map(fn($f) => sprintf('gameplay_format = "%s"', addslashes(strtoupper((string) $f))), $formats);
+                $parts[]  = '(' . implode($mode === 'and' ? ' AND ' : ' OR ', $fmtParts) . ')';
             }
         }
 

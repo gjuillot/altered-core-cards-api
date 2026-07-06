@@ -66,6 +66,7 @@ final class MeilisearchService
         'trigger_repeat_count',
         'has_effect',
         'keywords',
+        'gameplay_format',
     ];
 
     private Client $client;

@@ -72,6 +72,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\AfterIdFilter::class, properties: ['afterId'])]
 #[ApiFilter(\App\Filter\CostRelationFilter::class, properties: ['costRelation'])]
 #[ApiFilter(\App\Filter\CardGroupTransfugeFilter::class)]
+#[ApiFilter(\App\Filter\GameplayFormatFilter::class, properties: ['gameplayFormat'])]
 class CardGroup implements TimestampInterface
 {
     use TimestampTrait;
@@ -169,6 +170,15 @@ class CardGroup implements TimestampInterface
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
     #[ApiProperty(fetchEager: false)]
     private ?CardHistoryStatus $cardHistoryStatus = null;
+
+    /**
+     * Gameplay format keys the card belongs to, e.g. ["STANDARD", "DRAFT"]. GIN-indexed for containment filters.
+     * Uses the custom `text_array` DBAL type — without it ORM persistence (fixtures, builders)
+     * infers `json` from the PHP array type and Postgres rejects the JSON literal as a malformed array.
+     */
+    #[ORM\Column(type: 'text_array', columnDefinition: "TEXT[] NOT NULL DEFAULT '{}'")]
+    #[Groups(['card_group:read', 'card:list', 'card:read'])]
+    private array $gameplayFormat = [];
 
     #[ORM\Column(type: 'boolean', nullable: false)]
     #[Groups(['card_group:read', 'card:list', 'card:read'])]
@@ -365,6 +375,9 @@ class CardGroup implements TimestampInterface
 
     public function getCardHistoryStatus(): ?CardHistoryStatus { return $this->cardHistoryStatus; }
     public function setCardHistoryStatus(?CardHistoryStatus $v): self { $this->cardHistoryStatus = $v; return $this; }
+
+    public function getGameplayFormat(): array { return $this->gameplayFormat; }
+    public function setGameplayFormat(array $gameplayFormat): self { $this->gameplayFormat = $gameplayFormat; return $this; }
 
     public function getIsBanned(): bool { return $this->isBanned; }
     public function setIsBanned(bool $v): self { $this->isBanned = $v; return $this; }

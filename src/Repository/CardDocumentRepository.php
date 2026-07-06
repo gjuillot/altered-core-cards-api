@@ -32,16 +32,24 @@ final class CardDocumentRepository
      */
     public function streamPartialDocuments(array $fields, int $batchSize = 2000): \Generator
     {
-        $needsCostRelation = in_array('cost_relation', $fields, true);
-        $needsEffects      = (bool) array_intersect($fields, self::EFFECT_FIELDS);
-        $directFields      = array_filter($fields, fn($f) => $f !== 'cost_relation' && !in_array($f, self::EFFECT_FIELDS, true));
+        $needsCostRelation    = in_array('cost_relation', $fields, true);
+        $needsEffects         = (bool) array_intersect($fields, self::EFFECT_FIELDS);
+        $needsGameplayFormat  = in_array('gameplay_format', $fields, true);
+        $directFields         = array_filter(
+            $fields,
+            fn($f) => $f !== 'cost_relation' && $f !== 'gameplay_format' && !in_array($f, self::EFFECT_FIELDS, true)
+        );
 
         $cols  = $directFields ? implode(', ', array_map(fn($f) => "c.$f AS $f", $directFields)) : '';
         $joins = [];
 
-        if ($needsCostRelation || $needsEffects) {
+        if ($needsCostRelation || $needsEffects || $needsGameplayFormat) {
             $joins[] = 'LEFT JOIN card_group cg ON cg.id = c.card_group_id';
             $cols   .= ($cols !== '' ? ', ' : '') . 'cg.main_cost, cg.recall_cost';
+        }
+
+        if ($needsGameplayFormat) {
+            $cols .= ', cg.gameplay_format';
         }
 
         if ($needsEffects) {
@@ -78,6 +86,10 @@ final class CardDocumentRepository
 
             if ($needsEffects) {
                 $doc += $this->hydrateEffectFields($row);
+            }
+
+            if ($needsGameplayFormat) {
+                $doc['gameplay_format'] = $this->parsePgTextArray($row['gameplay_format']);
             }
 
             $batch[] = $doc;
@@ -209,7 +221,8 @@ final class CardDocumentRepository
                 COALESCE(
                     json_agg(DISTINCT cst.reference) FILTER (WHERE cst.reference IS NOT NULL),
                     '[]'
-                )                                                                     AS sub_types
+                )                                                                     AS sub_types,
+                cg.gameplay_format                                                    AS gameplay_format
             FROM card c
             LEFT JOIN card_group               cg   ON cg.id  = c.card_group_id
             LEFT JOIN card_set                 cs   ON cs.id  = c.set_id
@@ -238,7 +251,7 @@ final class CardDocumentRepository
                 c.is_serialized, c.variation, c.collector_number_formated_id, c.set_date,
                 cs.reference, cs.date,
                 cg.main_cost, cg.recall_cost, cg.ocean_power, cg.mountain_power, cg.forest_power,
-                cg.is_banned, cg.is_suspended, cg.is_errated,
+                cg.is_banned, cg.is_suspended, cg.is_errated, cg.gameplay_format,
                 f.code, r.reference, ct.reference,
                 at1.altered_id, ac1.altered_id, ae1.altered_id,
                 at2.altered_id, ac2.altered_id, ae2.altered_id,
@@ -269,6 +282,7 @@ final class CardDocumentRepository
             'rarity'         => $row['rarity'],
             'card_type'      => $row['card_type'],
             'sub_types'      => json_decode((string) $row['sub_types'], true),
+            'gameplay_format' => $this->parsePgTextArray($row['gameplay_format']),
             'main_cost'      => $row['main_cost'] !== null ? (int) $row['main_cost'] : null,
             'recall_cost'    => $row['recall_cost'] !== null ? (int) $row['recall_cost'] : null,
             'ocean_power'    => $row['ocean_power'] !== null ? (int) $row['ocean_power'] : null,
@@ -323,7 +337,7 @@ final class CardDocumentRepository
             'all_effects'     => array_values(array_unique(array_filter([$e1, $e2, $e3, $ee]))),
             'trigger_repeat_count' => $this->computeTriggerRepeatCount($t1, $t2, $t3, $te),
             'has_effect'  => isset($row['has_effect']) ? (bool) $row['has_effect'] : false,
-            'keywords'    => isset($row['keywords'])   ? $this->parseKeywords($row['keywords']) : [],
+            'keywords'    => isset($row['keywords'])   ? $this->parsePgTextArray($row['keywords']) : [],
             'transfuge'   => isset($row['transfuge'])  ? (bool) $row['transfuge'] : false,
         ];
     }
@@ -352,7 +366,7 @@ final class CardDocumentRepository
     }
 
     /** Parse PostgreSQL TEXT[] string e.g. "{CORIACE,FUGACE}" into a PHP array. */
-    private function parseKeywords(mixed $raw): array
+    private function parsePgTextArray(mixed $raw): array
     {
         if (!is_string($raw) || $raw === '{}' || $raw === '') {
             return [];

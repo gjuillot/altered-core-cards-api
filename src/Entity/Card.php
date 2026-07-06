@@ -96,6 +96,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 #[ApiFilter(\App\Filter\ArtistFilter::class)]
 #[ApiFilter(\App\Filter\BgaQueryFilter::class, properties: ['bga' => 'exact'])]
 #[ApiFilter(\App\Filter\AfterIdFilter::class, properties: ['afterId'])]
+#[ApiFilter(\App\Filter\GameplayFormatFilter::class, properties: ['gameplayFormat'])]
 class Card implements TimestampInterface
 {
     use TimestampTrait;
