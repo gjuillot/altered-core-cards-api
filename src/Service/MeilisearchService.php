@@ -55,8 +55,17 @@ final class MeilisearchService
         'is_serialized',
         'kickstarter',
         'promo',
+        'transfuge',
         'variation',
         'cost_relation',
+        'slot1_trigger', 'slot1_condition', 'slot1_effect',
+        'slot2_trigger', 'slot2_condition', 'slot2_effect',
+        'slot3_trigger', 'slot3_condition', 'slot3_effect',
+        'echo_trigger',  'echo_condition',  'echo_effect',
+        'all_triggers', 'all_conditions', 'all_effects',
+        'trigger_repeat_count',
+        'has_effect',
+        'keywords',
     ];
 
     private Client $client;
@@ -112,6 +121,33 @@ final class MeilisearchService
     public function streamDocuments(int $batchSize = 2000): \Generator
     {
         return $this->cardDocumentRepository->streamDocuments($batchSize);
+    }
+
+    /**
+     * Return facet distribution for triggers, conditions and effects
+     * matching the given filter (same filter string as searchIds).
+     *
+     * Returns ['triggers' => [alteredId => count], 'conditions' => [...], 'effects' => [...]]
+     */
+    public function getFacets(?string $filter = null): array
+    {
+        $params = [
+            'limit'  => 0,
+            'facets' => ['all_triggers', 'all_conditions', 'all_effects'],
+        ];
+
+        if ($filter !== null) {
+            $params['filter'] = $filter;
+        }
+
+        $results = $this->getIndex()->search(null, $params);
+        $dist    = $results->getFacetDistribution() ?? [];
+
+        return [
+            'triggers'   => $dist['all_triggers']   ?? [],
+            'conditions' => $dist['all_conditions']  ?? [],
+            'effects'    => $dist['all_effects']     ?? [],
+        ];
     }
 
     /**

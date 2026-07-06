@@ -31,6 +31,7 @@ final class EffectController extends AbstractController
             $result[] = [
                 'alteredId'     => $effect->getAlteredId(),
                 'filterExample' => 'effectSlot[1][effect]=' . $effect->getAlteredId(),
+                'isMain'        => $effect->isMain(),
                 'isSupport'     => $effect->isSupport(),
                 'factions'      => $factionsByAlteredId[$effect->getAlteredId()] ?? [],
                 'translations'  => $effect->getText(),
