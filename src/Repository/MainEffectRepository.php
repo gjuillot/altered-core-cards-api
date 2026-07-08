@@ -75,8 +75,10 @@ class MainEffectRepository extends ServiceEntityRepository
 
         return $conn->fetchAllAssociative(
             "SELECT kw->>'k' AS keyword, COUNT(*) AS nb
-             FROM main_effect, jsonb_array_elements(keywords) AS kw
-             WHERE keywords IS NOT NULL
+             FROM main_effect,
+                  jsonb_array_elements(
+                      CASE WHEN keywords IS NULL OR keywords::text = 'null' THEN '[]' ELSE keywords::text END::jsonb
+                  ) AS kw
              GROUP BY keyword
              ORDER BY nb DESC"
         );
