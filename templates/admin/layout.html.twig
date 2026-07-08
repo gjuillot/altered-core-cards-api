@@ -26,6 +26,10 @@
                class="text-sm font-medium {{ app.request.attributes.get('_route') starts with 'admin_abilities' ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900' }} dark:text-gray-300">
                 {{ 'nav.abilities'|trans }}
             </a>
+            <a href="{{ path('admin_gameplay_formats_index') }}"
+               class="text-sm font-medium {{ app.request.attributes.get('_route') starts with 'admin_gameplay_formats' ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900' }} dark:text-gray-300">
+                Gameplay formats
+            </a>
             <span class="text-gray-300 dark:text-gray-600">|</span>
 
             {# Locale switcher #}

@@ -1,0 +1,137 @@
+{% extends 'admin/layout.html.twig' %}
+
+{% block title %}Gameplay formats — Admin{% endblock %}
+
+{% block content %}
+
+<div class="flex justify-end mb-4">
+    <a href="{{ path('admin_gameplay_formats_import') }}"
+       class="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 focus:ring-4 focus:ring-teal-300">
+        Importer un gameplay format
+    </a>
+</div>
+
+{# ── Filters ──────────────────────────────────────────────────────────────── #}
+<div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
+    {{ form_start(filterForm, {attr: {class: 'flex flex-wrap gap-3 items-end'}}) }}
+        <div>
+            {{ form_label(filterForm.cardNumber, null, {label_attr: {class: 'block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1'}}) }}
+            {{ form_widget(filterForm.cardNumber, {attr: {class: 'bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-64 p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white'}}) }}
+        </div>
+        <div>
+            {{ form_label(filterForm.gameplayFormat, null, {label_attr: {class: 'block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1'}}) }}
+            {{ form_widget(filterForm.gameplayFormat, {attr: {class: 'bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white'}}) }}
+        </div>
+        <button type="submit"
+                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300">
+            Filtrer
+        </button>
+        {% if filterForm.vars.data.cardNumber is defined and (filterForm.vars.data.cardNumber or filterForm.vars.data.gameplayFormat) %}
+            <a href="{{ path('admin_gameplay_formats_index') }}"
+               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600">
+                Réinitialiser
+            </a>
+        {% endif %}
+    {{ form_end(filterForm) }}
+</div>
+
+{# ── Table ────────────────────────────────────────────────────────────────── #}
+<div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <span class="text-sm text-gray-500 dark:text-gray-400">
+            {% if hasFilter %}
+                <strong class="text-gray-900 dark:text-white">{{ total|number_format(0, ',', ' ') }}</strong> carte(s)
+            {% else %}
+                Aucune recherche lancée
+            {% endif %}
+        </span>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                <tr>
+                    <th class="px-4 py-3">Référence</th>
+                    <th class="px-4 py-3 w-32">N° collection</th>
+                    <th class="px-4 py-3 w-32">Set</th>
+                    <th class="px-4 py-3">Gameplay formats</th>
+                    <th class="px-4 py-3 w-16"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                {% for card in cards %}
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td class="px-4 py-3 font-mono text-xs text-gray-900 dark:text-white">{{ card.reference }}</td>
+                    <td class="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{{ card.collectorNumberFormatedId ?? '—' }}</td>
+                    <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{{ card.set ? card.set.reference : '—' }}</td>
+                    <td class="px-4 py-3">
+                        {% if card.cardGroup and card.cardGroup.gameplayFormat %}
+                            <div class="flex flex-wrap gap-1">
+                                {% for fmt in card.cardGroup.gameplayFormat %}
+                                    <span class="px-1.5 py-0.5 text-xs rounded bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 font-medium">
+                                        {{ fmt }}
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span class="text-gray-300 dark:text-gray-600">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                        {% if card.cardGroup %}
+                            <a href="{{ path('admin_gameplay_formats_edit', {id: card.cardGroup.id}) }}"
+                               class="font-medium text-blue-600 dark:text-blue-500 hover:underline text-xs">Modifier</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+                        {{ hasFilter ? 'Aucune carte trouvée.' : 'Renseignez un numéro de carte ou un gameplay format pour lancer la recherche.' }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# Pagination #}
+    {% if totalPages > 1 %}
+    <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Page {{ page }} / {{ totalPages }}
+        </span>
+        <nav class="flex items-center gap-1">
+            {% if page > 1 %}
+                <a href="{{ path('admin_gameplay_formats_index', app.request.query.all|merge({page: page - 1})) }}"
+                   class="flex items-center justify-center w-9 h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 font-medium text-sm">
+                    ‹
+                </a>
+            {% else %}
+                <span class="flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-300 dark:text-gray-600 text-sm cursor-not-allowed">‹</span>
+            {% endif %}
+
+            {% for p in max(1, page - 2)..min(totalPages, page + 2) %}
+                <a href="{{ path('admin_gameplay_formats_index', app.request.query.all|merge({page: p})) }}"
+                   class="flex items-center justify-center w-9 h-9 rounded-lg border text-sm font-semibold
+                          {{ p == page
+                             ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                             : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600' }}">
+                    {{ p }}
+                </a>
+            {% endfor %}
+
+            {% if page < totalPages %}
+                <a href="{{ path('admin_gameplay_formats_index', app.request.query.all|merge({page: page + 1})) }}"
+                   class="flex items-center justify-center w-9 h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 font-medium text-sm">
+                    ›
+                </a>
+            {% else %}
+                <span class="flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-300 dark:text-gray-600 text-sm cursor-not-allowed">›</span>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends 'admin/layout.html.twig' %}
+
+{% block title %}Gameplay formats — {{ cardGroup.slug }} — Admin{% endblock %}
+
+{% block stylesheets %}
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+    <a href="{{ path('admin_gameplay_formats_index') }}" class="text-sm text-blue-600 hover:underline">← Retour à la recherche</a>
+</div>
+
+<div class="max-w-2xl bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
+    <div class="flex items-center gap-3 mb-5">
+        <span class="text-xs font-mono text-gray-400">card_group #{{ cardGroup.id }}</span>
+        <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ cardGroup.slug }}</span>
+    </div>
+
+    <form method="post" class="space-y-4">
+        <input type="hidden" name="_token" value="{{ csrf_token('gameplay_format_edit_' ~ cardGroup.id) }}">
+        <div>
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Gameplay formats</label>
+            <select id="gameplay-format-select" name="gameplayFormat[]" multiple
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                {% for fmt in formats %}
+                    <option value="{{ fmt }}" {{ fmt in cardGroup.gameplayFormat ? 'selected' : '' }}>{{ fmt }}</option>
+                {% endfor %}
+            </select>
+            <p class="mt-1 text-xs text-gray-400">Tapez une valeur puis Entrée pour créer un nouveau gameplay format.</p>
+        </div>
+
+        <div class="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+            <button type="submit"
+                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300">
+                Sauvegarder
+            </button>
+            <a href="{{ path('admin_gameplay_formats_index') }}"
+               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600">
+                Annuler
+            </a>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block javascripts %}
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+    <script>
+        new TomSelect('#gameplay-format-select', {
+            plugins: ['remove_button'],
+            create: true,
+            createOnBlur: true,
+            persist: false,
+            placeholder: 'Ajouter un gameplay format...',
+            onOptionAdd(value) {
+                this.updateOption(value, { value: value.toUpperCase(), text: value.toUpperCase() });
+            },
+        });
+    </script>
+{% endblock %}

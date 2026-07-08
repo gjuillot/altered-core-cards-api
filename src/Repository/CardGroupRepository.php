@@ -54,6 +54,14 @@ class CardGroupRepository extends ServiceEntityRepository
         return $map;
     }
 
+    /** Distinct gameplay format keys currently in use, for building admin select choices. */
+    public function findDistinctGameplayFormats(): array
+    {
+        return $this->getEntityManager()->getConnection()->fetchFirstColumn(
+            'SELECT DISTINCT fmt FROM card_group, unnest(gameplay_format) AS fmt ORDER BY fmt'
+        );
+    }
+
     /** @return array<array{trigger_id: int, trigger_text: string|null, nb: int}> */
     public function getTriggerStats(): array
     {
