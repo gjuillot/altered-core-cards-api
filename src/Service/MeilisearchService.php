@@ -23,6 +23,8 @@ final class MeilisearchService
         'main_effect_en',
         'echo_effect_fr',
         'echo_effect_en',
+        'reference',
+        'collector_number_formated_id',
     ];
 
     /**
@@ -188,5 +190,27 @@ final class MeilisearchService
         $results = $this->getIndex()->search($query ?: null, $params);
 
         return array_column($results->getHits(), 'id');
+    }
+
+    /**
+     * Estimated total hits for a query+filter combination (limit=0, instant).
+     *
+     * @param string[] $attributesToSearchOn
+     */
+    public function countIds(string $query = '', ?string $filter = null, array $attributesToSearchOn = []): int
+    {
+        $params = ['limit' => 0];
+
+        if ($filter !== null) {
+            $params['filter'] = $filter;
+        }
+
+        if (!empty($attributesToSearchOn)) {
+            $params['attributesToSearchOn'] = $attributesToSearchOn;
+        }
+
+        $results = $this->getIndex()->search($query ?: null, $params);
+
+        return $results->getEstimatedTotalHits() ?? 0;
     }
 }

@@ -135,4 +135,110 @@ class CardRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    /**
+     * Search cards by number (reference or collector number) and/or gameplay format,
+     * for the gameplay-format admin screen.
+     *
+     * @return array{0: Card[], 1: int}
+     */
+    public function findFilteredForGameplayFormatAdmin(?string $cardNumber, ?string $gameplayFormat, int $page, int $perPage): array
+    {
+        $qb = $this->createQueryBuilder('c')
+            ->leftJoin('c.cardGroup', 'cg')
+            ->leftJoin('c.set', 's')
+            ->addSelect('cg', 's');
+
+        if ($cardNumber !== null && $cardNumber !== '') {
+            $qb->andWhere('c.reference LIKE :num OR c.collectorNumberFormatedId LIKE :num')
+               ->setParameter('num', '%' . $cardNumber . '%');
+        }
+
+        if ($gameplayFormat !== null && $gameplayFormat !== '') {
+            $qb->andWhere('cg.id IN (:gfIds)')
+               ->setParameter('gfIds', $this->cardGroupIdsForGameplayFormat($gameplayFormat));
+        }
+
+        $total = (int) (clone $qb)
+            ->select('COUNT(c.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $results = $qb
+            ->orderBy('c.reference', 'ASC')
+            ->setFirstResult(($page - 1) * $perPage)
+            ->setMaxResults($perPage)
+            ->getQuery()
+            ->getResult();
+
+        return [$results, $total];
+    }
+
+    /** @return int[] */
+    private function cardGroupIdsForGameplayFormat(string $format): array
+    {
+        $escaped = str_replace("'", "''", strtoupper($format));
+        $ids     = $this->getEntityManager()->getConnection()
+            ->fetchFirstColumn("SELECT id FROM card_group WHERE gameplay_format @> ARRAY['$escaped']");
+
+        return $ids ?: [0];
+    }
+
+    /**
+     * Resolves card references (e.g. from a gameplay-format import file) to their CardGroup id.
+     *
+     * @param  string[] $references
+     * @return array{0: array<string,int>, 1: string[]}  [reference => cardGroupId, unmatched references]
+     */
+    public function resolveCardGroupIdsByReferences(array $references): array
+    {
+        if (empty($references)) {
+            return [[], []];
+        }
+
+        $rows = $this->createQueryBuilder('c')
+            ->select('c.reference AS reference', 'IDENTITY(c.cardGroup) AS cardGroupId')
+            ->where('c.reference IN (:refs)')
+            ->andWhere('c.cardGroup IS NOT NULL')
+            ->setParameter('refs', $references)
+            ->getQuery()
+            ->getArrayResult();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['reference']] = (int) $row['cardGroupId'];
+        }
+
+        return [$map, array_values(array_diff($references, array_keys($map)))];
+    }
+
+    /**
+     * Fetch cards by id, with cardGroup/set eagerly joined, in the given id order
+     * (used to hydrate a Meilisearch result page by primary key).
+     *
+     * @param  int[] $ids
+     * @return Card[]
+     */
+    public function findByIdsWithRelations(array $ids): array
+    {
+        if (empty($ids)) {
+            return [];
+        }
+
+        $rows = $this->createQueryBuilder('c')
+            ->leftJoin('c.cardGroup', 'cg')
+            ->leftJoin('c.set', 's')
+            ->addSelect('cg', 's')
+            ->where('c.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->getQuery()
+            ->getResult();
+
+        $byId = [];
+        foreach ($rows as $card) {
+            $byId[$card->getId()] = $card;
+        }
+
+        return array_values(array_filter(array_map(fn($id) => $byId[$id] ?? null, $ids)));
+    }
 }
