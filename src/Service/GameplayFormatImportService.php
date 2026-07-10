@@ -2,9 +2,13 @@
 
 namespace App\Service;
 
+use App\EventListener\CardSearchListener;
+use App\EventListener\MeilisearchSyncListener;
+use App\Repository\CardDocumentRepository;
 use App\Repository\CardGroupRepository;
 use App\Repository\CardRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
@@ -19,7 +23,11 @@ final readonly class GameplayFormatImportService
         private HttpClientInterface $httpClient,
         private CardRepository $cardRepository,
         private CardGroupRepository $cardGroupRepository,
+        private CardDocumentRepository $cardDocumentRepository,
+        private CardSearchUpdater $cardSearchUpdater,
+        private MeilisearchService $meilisearch,
         private EntityManagerInterface $em,
+        private LoggerInterface $logger,
     ) {}
 
     /**
@@ -58,6 +66,13 @@ final readonly class GameplayFormatImportService
     /**
      * Adds $formatName to the gameplayFormat array of every given CardGroup (idempotent).
      *
+     * A CardGroup can have dozens of Card prints (reprints, serialized variants...).
+     * The default per-entity listeners (MeilisearchSyncListener, CardSearchListener)
+     * would fire once per Card on every touched CardGroup — for a few hundred groups
+     * that's thousands of synchronous Meilisearch HTTP calls in one request, which is
+     * what caused the 504 on import. Disable them for the bulk write and resync the
+     * affected groups in two batched calls instead.
+     *
      * @param int[] $cardGroupIds
      * @return int Number of CardGroups actually modified.
      */
@@ -68,17 +83,45 @@ final readonly class GameplayFormatImportService
             return 0;
         }
 
-        $updated = 0;
-        foreach ($this->cardGroupRepository->findBy(['id' => $cardGroupIds]) as $cardGroup) {
-            $current = $cardGroup->getGameplayFormat();
-            if (!in_array($formatName, $current, true)) {
-                $cardGroup->setGameplayFormat([...$current, $formatName]);
-                $updated++;
-            }
-        }
-        $this->em->flush();
+        $updatedGroupIds = [];
 
-        return $updated;
+        MeilisearchSyncListener::$disabled = true;
+        CardSearchListener::$disabled      = true;
+        try {
+            foreach ($this->cardGroupRepository->findBy(['id' => $cardGroupIds]) as $cardGroup) {
+                $current = $cardGroup->getGameplayFormat();
+                if (!in_array($formatName, $current, true)) {
+                    $cardGroup->setGameplayFormat([...$current, $formatName]);
+                    $updatedGroupIds[] = $cardGroup->getId();
+                }
+            }
+            $this->em->flush();
+        } finally {
+            MeilisearchSyncListener::$disabled = false;
+            CardSearchListener::$disabled      = false;
+        }
+
+        if (empty($updatedGroupIds)) {
+            return 0;
+        }
+
+        foreach ($updatedGroupIds as $cardGroupId) {
+            $this->cardSearchUpdater->upsertByCardGroupId($cardGroupId);
+        }
+
+        try {
+            $this->meilisearch->indexDocuments(
+                $this->cardDocumentRepository->findDocumentsByCardGroupIds($updatedGroupIds)
+            );
+        } catch (\Throwable $e) {
+            // The gameplayFormat write already succeeded in Postgres — a Meilisearch
+            // hiccup here shouldn't fail the import, just leave the index briefly stale.
+            $this->logger->error('Gameplay-format import: bulk Meilisearch reindex failed', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return count($updatedGroupIds);
     }
 
     /** @return string[] */

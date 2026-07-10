@@ -114,6 +114,20 @@ final class MeilisearchService
     }
 
     /**
+     * Push multiple prebuilt documents in a single request (bulk update, e.g. after
+     * a batch write that disabled the per-entity MeilisearchSyncListener).
+     *
+     * @param array<int, array<string, mixed>> $docs
+     */
+    public function indexDocuments(array $docs): void
+    {
+        if (empty($docs)) {
+            return;
+        }
+        $this->getIndex()->addDocuments($docs);
+    }
+
+    /**
      * Delete a single card from the index.
      */
     public function deleteCard(Card $card): void

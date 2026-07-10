@@ -146,6 +146,34 @@ final class CardDocumentRepository
     }
 
     /**
+     * Build documents for every card belonging to the given CardGroups, in one query.
+     * Used to bulk-reindex a small, targeted set of groups (e.g. after a gameplay-format
+     * import) without the N+1 HTTP-per-card cost of calling findDocument() in a loop.
+     *
+     * @param  int[] $cardGroupIds
+     * @return array<int, array<string, mixed>>
+     */
+    public function findDocumentsByCardGroupIds(array $cardGroupIds): array
+    {
+        if (empty($cardGroupIds)) {
+            return [];
+        }
+
+        $result = $this->connection->executeQuery(
+            $this->buildSql(whereCardGroupIds: true),
+            ['cardGroupIds' => $cardGroupIds],
+            ['cardGroupIds' => \Doctrine\DBAL\ArrayParameterType::INTEGER],
+        );
+
+        $docs = [];
+        while (($row = $result->fetchAssociative()) !== false) {
+            $docs[] = $this->hydrate($row);
+        }
+
+        return $docs;
+    }
+
+    /**
      * Count total cards (for progress bars, etc.).
      */
     public function countAll(): int
@@ -171,9 +199,13 @@ final class CardDocumentRepository
         return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $clean);
     }
 
-    private function buildSql(bool $whereCardId = false): string
+    private function buildSql(bool $whereCardId = false, bool $whereCardGroupIds = false): string
     {
-        $where = $whereCardId ? 'WHERE c.id = :id' : '';
+        $where = match (true) {
+            $whereCardId       => 'WHERE c.id = :id',
+            $whereCardGroupIds => 'WHERE cg.id IN (:cardGroupIds)',
+            default            => '',
+        };
 
         return <<<SQL
             SELECT
