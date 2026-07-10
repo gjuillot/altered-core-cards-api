@@ -213,6 +213,56 @@ class CardRepository extends ServiceEntityRepository
     }
 
     /**
+     * Resolves the CardGroup ids that are NOT banned by a ban-list format definition
+     * (e.g. Living Legends' excluded_sets / excluded_refs): a CardGroup is excluded as
+     * soon as one of its prints belongs to an excluded set, or is itself an excluded reference.
+     *
+     * @param  string[] $excludedSetCodes Set.reference values (e.g. "CORE", "COREKS")
+     * @param  string[] $excludedRefs     Card.reference values banned regardless of set
+     * @return array{0: int[], 1: string[]}  [legal CardGroup ids, excludedRefs not found in base]
+     */
+    public function resolveCardGroupIdsExcluding(array $excludedSetCodes, array $excludedRefs): array
+    {
+        $unmatchedRefs = [];
+        if (!empty($excludedRefs)) {
+            $rows = $this->createQueryBuilder('c')
+                ->select('c.reference AS reference')
+                ->where('c.reference IN (:refs)')
+                ->setParameter('refs', $excludedRefs)
+                ->getQuery()
+                ->getArrayResult();
+            $unmatchedRefs = array_values(array_diff($excludedRefs, array_column($rows, 'reference')));
+        }
+
+        $qb = $this->createQueryBuilder('c')
+            ->select('IDENTITY(c.cardGroup) AS cardGroupId')
+            ->distinct()
+            ->where('c.cardGroup IS NOT NULL');
+
+        if (!empty($excludedSetCodes)) {
+            $bySetDql = sprintf(
+                'SELECT 1 FROM %s cs JOIN cs.set s WHERE cs.cardGroup = c.cardGroup AND s.reference IN (:excludedSetCodes)',
+                Card::class,
+            );
+            $qb->andWhere($qb->expr()->not($qb->expr()->exists($bySetDql)))
+               ->setParameter('excludedSetCodes', $excludedSetCodes);
+        }
+
+        if (!empty($excludedRefs)) {
+            $byRefDql = sprintf(
+                'SELECT 1 FROM %s cr WHERE cr.cardGroup = c.cardGroup AND cr.reference IN (:excludedRefs)',
+                Card::class,
+            );
+            $qb->andWhere($qb->expr()->not($qb->expr()->exists($byRefDql)))
+               ->setParameter('excludedRefs', $excludedRefs);
+        }
+
+        $ids = array_column($qb->getQuery()->getArrayResult(), 'cardGroupId');
+
+        return [array_values(array_unique(array_map('intval', $ids))), $unmatchedRefs];
+    }
+
+    /**
      * Fetch cards by id, with cardGroup/set eagerly joined, in the given id order
      * (used to hydrate a Meilisearch result page by primary key).
      *

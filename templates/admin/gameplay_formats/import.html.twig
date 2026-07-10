@@ -26,7 +26,10 @@
             <input type="url" name="url" value="{{ url }}" required
                    placeholder="https://.../frontier.json"
                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono">
-            <p class="mt-1 text-xs text-gray-400">Le fichier doit contenir <code>{ "id": "...", "version": 1, "included_refs": ["..."] }</code>.</p>
+            <p class="mt-1 text-xs text-gray-400">
+                Allowlist : <code>{ "id": "...", "version": 1, "included_refs": ["..."] }</code>
+                — ou ban-list : <code>{ "id": "...", "version": 1, "excluded_sets": ["..."], "excluded_refs": ["..."] }</code>.
+            </p>
         </div>
 
         <div class="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
@@ -52,15 +55,25 @@
             <dd class="font-mono text-xs text-gray-700 dark:text-gray-300">{{ preview.sourceId }} (v{{ preview.version }})</dd>
         </div>
         <div class="flex justify-between">
-            <dt class="text-gray-500 dark:text-gray-400">Références dans le fichier</dt>
+            <dt class="text-gray-500 dark:text-gray-400">Type de fichier</dt>
+            <dd class="text-gray-900 dark:text-white">{{ preview.mode == 'exclusion' ? 'Ban-list (excluded_sets / excluded_refs)' : 'Allowlist (included_refs)' }}</dd>
+        </div>
+        {% if preview.mode == 'exclusion' and preview.excludedSetCodes|length %}
+        <div class="flex justify-between">
+            <dt class="text-gray-500 dark:text-gray-400">Sets exclus</dt>
+            <dd class="font-mono text-xs text-gray-900 dark:text-white">{{ preview.excludedSetCodes|join(', ') }}</dd>
+        </div>
+        {% endif %}
+        <div class="flex justify-between">
+            <dt class="text-gray-500 dark:text-gray-400">{{ preview.mode == 'exclusion' ? 'Références bannies dans le fichier' : 'Références dans le fichier' }}</dt>
             <dd class="text-gray-900 dark:text-white">{{ preview.totalRefs }}</dd>
         </div>
         <div class="flex justify-between">
-            <dt class="text-gray-500 dark:text-gray-400">Cartes correspondantes en base</dt>
+            <dt class="text-gray-500 dark:text-gray-400">{{ preview.mode == 'exclusion' ? 'Cartes légales en base' : 'Cartes correspondantes en base' }}</dt>
             <dd class="text-green-700 dark:text-green-400 font-semibold">{{ preview.matchedCardGroupIds|length }}</dd>
         </div>
         <div class="flex justify-between">
-            <dt class="text-gray-500 dark:text-gray-400">Références introuvables</dt>
+            <dt class="text-gray-500 dark:text-gray-400">{{ preview.mode == 'exclusion' ? 'Références bannies introuvables' : 'Références introuvables' }}</dt>
             <dd class="{{ preview.unmatchedRefs|length ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-400' }}">
                 {{ preview.unmatchedRefs|length }}
             </dd>
@@ -69,7 +82,9 @@
 
     {% if preview.unmatchedRefs|length %}
         <div class="mb-5 p-3 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
-            <p class="text-xs font-medium text-amber-800 dark:text-amber-300 mb-2">Références non trouvées en base (ignorées) :</p>
+            <p class="text-xs font-medium text-amber-800 dark:text-amber-300 mb-2">
+                {{ preview.mode == 'exclusion' ? 'Références bannies non trouvées en base (sans effet) :' : 'Références non trouvées en base (ignorées) :' }}
+            </p>
             <div class="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
                 {% for ref in preview.unmatchedRefs|slice(0, 50) %}
                     <span class="px-1.5 py-0.5 text-xs rounded bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-300 font-mono">{{ ref }}</span>
