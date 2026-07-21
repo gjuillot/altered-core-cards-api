@@ -12,10 +12,13 @@ use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
- * Imports a gameplay-format definition file (e.g. frontier.json) from a URL.
+ * Imports a gameplay-format definition file (e.g. frontier.json, living-legend.json) from a URL.
  *
- * Expected shape:
- *   { "id": "frontier", "version": 1, "included_refs": ["ALT_..._U_1234", ...] }
+ * Two manifest shapes are supported:
+ *   - allowlist:  { "id": "frontier", "version": 1, "included_refs": ["ALT_..._U_1234", ...] }
+ *   - ban-list:   { "id": "living-legend", "version": 1, "excluded_sets": ["CORE", ...], "excluded_refs": ["ALT_..._U_1234", ...] }
+ *
+ * The shape is auto-detected from which keys are present in the JSON.
  */
 final readonly class GameplayFormatImportService
 {
@@ -51,15 +54,30 @@ final readonly class GameplayFormatImportService
             return GameplayFormatImportResult::error(implode(' ', $errors));
         }
 
-        $references = array_values(array_unique($data['included_refs']));
-        [$map, $unmatched] = $this->cardRepository->resolveCardGroupIdsByReferences($references);
+        if (isset($data['included_refs'])) {
+            $references = array_values(array_unique($data['included_refs']));
+            [$map, $unmatched] = $this->cardRepository->resolveCardGroupIdsByReferences($references);
 
-        return GameplayFormatImportResult::success(
+            return GameplayFormatImportResult::success(
+                sourceId: (string) $data['id'],
+                version: (int) $data['version'],
+                totalRefs: count($references),
+                matchedCardGroupIds: array_values(array_unique($map)),
+                unmatchedRefs: $unmatched,
+            );
+        }
+
+        $excludedSetCodes = array_values(array_unique($data['excluded_sets'] ?? []));
+        $excludedRefs     = array_values(array_unique($data['excluded_refs'] ?? []));
+        [$matchedCardGroupIds, $unmatched] = $this->cardRepository->resolveCardGroupIdsExcluding($excludedSetCodes, $excludedRefs);
+
+        return GameplayFormatImportResult::successExclusion(
             sourceId: (string) $data['id'],
             version: (int) $data['version'],
-            totalRefs: count($references),
-            matchedCardGroupIds: array_values(array_unique($map)),
+            totalRefs: count($excludedRefs),
+            matchedCardGroupIds: $matchedCardGroupIds,
             unmatchedRefs: $unmatched,
+            excludedSetCodes: $excludedSetCodes,
         );
     }
 
@@ -141,17 +159,44 @@ final readonly class GameplayFormatImportService
             $errors[] = 'Champ "version" manquant ou invalide.';
         }
 
-        if (empty($data['included_refs']) || !is_array($data['included_refs'])) {
-            $errors[] = 'Champ "included_refs" manquant ou vide.';
+        $hasIncludedRefs = array_key_exists('included_refs', $data);
+        $hasExclusionKeys = array_key_exists('excluded_sets', $data) || array_key_exists('excluded_refs', $data);
+
+        if (!$hasIncludedRefs && !$hasExclusionKeys) {
+            $errors[] = 'Le fichier doit contenir soit "included_refs", soit "excluded_sets"/"excluded_refs".';
+            return $errors;
+        }
+
+        if ($hasIncludedRefs) {
+            $errors = [...$errors, ...$this->validateStringArray($data['included_refs'], 'included_refs', allowEmpty: false)];
         } else {
-            foreach ($data['included_refs'] as $ref) {
-                if (!is_string($ref) || trim($ref) === '') {
-                    $errors[] = 'Le champ "included_refs" doit contenir uniquement des chaînes non vides.';
-                    break;
-                }
+            if (empty($data['excluded_sets']) && empty($data['excluded_refs'])) {
+                $errors[] = 'Au moins un des champs "excluded_sets" ou "excluded_refs" doit être non vide.';
+            }
+            if (array_key_exists('excluded_sets', $data)) {
+                $errors = [...$errors, ...$this->validateStringArray($data['excluded_sets'], 'excluded_sets', allowEmpty: true)];
+            }
+            if (array_key_exists('excluded_refs', $data)) {
+                $errors = [...$errors, ...$this->validateStringArray($data['excluded_refs'], 'excluded_refs', allowEmpty: true)];
             }
         }
 
         return $errors;
+    }
+
+    /** @return string[] */
+    private function validateStringArray(mixed $value, string $field, bool $allowEmpty): array
+    {
+        if (!is_array($value) || (!$allowEmpty && empty($value))) {
+            return [sprintf('Champ "%s" manquant ou invalide.', $field)];
+        }
+
+        foreach ($value as $item) {
+            if (!is_string($item) || trim($item) === '') {
+                return [sprintf('Le champ "%s" doit contenir uniquement des chaînes non vides.', $field)];
+            }
+        }
+
+        return [];
     }
 }

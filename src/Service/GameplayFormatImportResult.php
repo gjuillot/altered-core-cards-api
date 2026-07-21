@@ -9,11 +9,14 @@ final readonly class GameplayFormatImportResult
         public ?string $error = null,
         public ?string $sourceId = null,
         public ?int $version = null,
+        public string $mode = 'inclusion',
         public int $totalRefs = 0,
         /** @var int[] */
         public array $matchedCardGroupIds = [],
         /** @var string[] */
         public array $unmatchedRefs = [],
+        /** @var string[] */
+        public array $excludedSetCodes = [],
     ) {}
 
     public static function error(string $message): self
@@ -36,9 +39,35 @@ final readonly class GameplayFormatImportResult
             ok: true,
             sourceId: $sourceId,
             version: $version,
+            mode: 'inclusion',
             totalRefs: $totalRefs,
             matchedCardGroupIds: $matchedCardGroupIds,
             unmatchedRefs: $unmatchedRefs,
+        );
+    }
+
+    /**
+     * @param int[]    $matchedCardGroupIds
+     * @param string[] $unmatchedRefs
+     * @param string[] $excludedSetCodes
+     */
+    public static function successExclusion(
+        string $sourceId,
+        int $version,
+        int $totalRefs,
+        array $matchedCardGroupIds,
+        array $unmatchedRefs,
+        array $excludedSetCodes,
+    ): self {
+        return new self(
+            ok: true,
+            sourceId: $sourceId,
+            version: $version,
+            mode: 'exclusion',
+            totalRefs: $totalRefs,
+            matchedCardGroupIds: $matchedCardGroupIds,
+            unmatchedRefs: $unmatchedRefs,
+            excludedSetCodes: $excludedSetCodes,
         );
     }
 }
