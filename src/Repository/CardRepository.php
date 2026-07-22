@@ -109,6 +109,23 @@ class CardRepository extends ServiceEntityRepository
         return $map;
     }
 
+    /**
+     * Resolves a trailing-wildcard reference pattern (e.g. "ALT_ALIZE_B_BR_37_U_*")
+     * against known Card references, cardGroup eagerly joined.
+     *
+     * @return Card[]
+     */
+    public function findByReferenceLike(string $likePattern): array
+    {
+        return $this->createQueryBuilder('c')
+            ->addSelect('cg')
+            ->leftJoin('c.cardGroup', 'cg')
+            ->where('c.reference LIKE :pattern')
+            ->setParameter('pattern', $likePattern)
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return string[] */
     public function findReferencesByEffect(int $effectId, int $limit = 20): array
     {
