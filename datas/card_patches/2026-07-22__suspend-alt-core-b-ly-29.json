@@ -1,0 +1,9 @@
+{
+  "date": "2026-07-22",
+  "description": "Suspend ALT_CORE_B_LY_29 (C, R1, R2)",
+  "updates": [
+    { "reference": "ALT_CORE_B_LY_29_C", "fields": { "isSuspended": true } },
+    { "reference": "ALT_CORE_B_LY_29_R1", "fields": { "isSuspended": true } },
+    { "reference": "ALT_CORE_B_LY_29_R2", "fields": { "isSuspended": true } }
+  ]
+}
